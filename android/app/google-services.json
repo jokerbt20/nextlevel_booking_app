@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "302902440588",
+    "project_id": "nextlevel-90e2f",
+    "storage_bucket": "nextlevel-90e2f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:302902440588:android:f35c5491152280a644c1a9",
+        "android_client_info": {
+          "package_name": "mk.nextlevel.bookings"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCR5nOHKRgnKEQcf_HFSa8YQJrt2cp6j2g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

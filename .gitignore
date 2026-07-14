@@ -1,41 +1,45 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
+# Dependencies
 node_modules/
 
-# Expo
-.expo/
+# IDE
+.idea/
+
+# Build output
 dist/
-web-build/
-expo-env.d.ts
 
-# Native
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
+# Android build artifacts
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/app/src/main/assets/public
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/capacitor-cordova-android-plugins/
 
-# Metro
-.metro-health-check*
+# Android IDE
+android/.idea/workspace.xml
+android/.idea/tasks.xml
+android/.idea/caches
+android/.idea/modules.xml
+android/.idea/navEditor.xml
+android/.idea/assetWizardSettings.xml
+android/.idea/gradle.xml
+android/.idea/dictionaries
+android/.idea/libraries
+*.iml
 
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
+# APKs and other binaries
+*.apk
+*.aar
+*.ap_
+*.aab
+*.dex
+*.class
+*.hprof
 
-# macOS
+# Logs
+*.log
+
+# Misc
 .DS_Store
-*.pem
-
-# local env files
-.env*.local
-
-# typescript
-*.tsbuildinfo
-
-# generated native folders
-/ios
-/android

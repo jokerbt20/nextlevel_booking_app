@@ -1,0 +1,10 @@
+{
+  "appId": "mk.nextlevel.bookings",
+  "appName": "NextLevel Bookings",
+  "webDir": "dist",
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}
