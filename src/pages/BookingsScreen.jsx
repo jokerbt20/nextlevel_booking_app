@@ -6,19 +6,25 @@ import CalendarView from '../components/CalendarView'
 import Header from '../components/Header'
 import { color, radius, shadow } from '../theme'
 
+// Status tabs act on upcoming bookings; "Finished" is a separate tab for
+// everything whose date has already passed.
 const FILTERS = [
-  { key: 'all', label: 'All' },
+  { key: 'all', label: 'Upcoming' },
   { key: 'pending', label: 'Pending' },
   { key: 'in_plan', label: 'In Plan' },
   { key: 'confirmed', label: 'Confirmed' },
+  { key: 'finished', label: 'Finished' },
 ]
 
-function sortByEventDate(bookings) {
+const isFinished = (b) => b.eventDate && new Date(b.eventDate).getTime() < Date.now()
+
+function sortByEventDate(bookings, direction = 'asc') {
+  const dir = direction === 'desc' ? -1 : 1
   return [...bookings].sort((a, b) => {
     if (!a.eventDate && !b.eventDate) return 0
-    if (!a.eventDate) return 1
+    if (!a.eventDate) return 1 // undated always sinks to the bottom
     if (!b.eventDate) return -1
-    return new Date(a.eventDate) - new Date(b.eventDate)
+    return dir * (new Date(a.eventDate) - new Date(b.eventDate))
   })
 }
 
@@ -63,8 +69,23 @@ export default function BookingsScreen({ pendingBookingId, onConsumePendingBooki
     )
   }
 
-  const sorted = sortByEventDate(bookings)
-  const visible = filter === 'all' ? sorted : sorted.filter((b) => b.status === filter)
+  const upcoming = bookings.filter((b) => !isFinished(b))
+  const finished = bookings.filter(isFinished)
+
+  // The list: Finished tab shows past bookings (most recent first); every other
+  // tab shows only upcoming appointments (soonest first), optionally by status.
+  let listBookings
+  if (filter === 'finished') {
+    listBookings = sortByEventDate(finished, 'desc')
+  } else {
+    const scoped = filter === 'all' ? upcoming : upcoming.filter((b) => b.status === filter)
+    listBookings = sortByEventDate(scoped, 'asc')
+  }
+
+  // The calendar stays fully browsable across months; only the status filter
+  // narrows it (the Finished tab doesn't restrict the calendar to the past).
+  const calendarBookings =
+    filter === 'all' || filter === 'finished' ? bookings : bookings.filter((b) => b.status === filter)
 
   return (
     <div>
@@ -101,18 +122,21 @@ export default function BookingsScreen({ pendingBookingId, onConsumePendingBooki
         {error && <p style={styles.errorText}>Couldn't load bookings: {error}</p>}
 
         {!isLoading && !error && view === 'calendar' && (
-          <CalendarView bookings={visible} onSelectBooking={setSelectedId} onCreateForDate={onCreateForDate} />
+          <CalendarView bookings={calendarBookings} onSelectBooking={setSelectedId} onCreateForDate={onCreateForDate} />
         )}
 
-        {!isLoading && !error && view === 'list' && visible.length === 0 && (
-          <p style={styles.info}>No bookings here yet.</p>
+        {!isLoading && !error && view === 'list' && listBookings.length === 0 && (
+          <p style={styles.info}>
+            {filter === 'finished' ? 'No finished bookings yet.' : 'No upcoming appointments.'}
+          </p>
         )}
 
-        {!isLoading && !error && view === 'list' && visible.length > 0 && (
+        {!isLoading && !error && view === 'list' && listBookings.length > 0 && (
           <div style={styles.list}>
-            {visible.map((booking) => {
+            {listBookings.map((booking, idx) => {
               const name = [booking.customerName, booking.customerLastName].filter(Boolean).join(' ') || 'Unknown customer'
               const statusColor = STATUS_COLOR[booking.status] ?? '#6B7280'
+              const isNext = idx === 0 && filter !== 'finished' && booking.eventDate
               return (
                 <button key={booking.id} style={styles.card} onClick={() => setSelectedId(booking.id)}>
                   <span style={{ ...styles.accent, background: statusColor }} />
@@ -123,6 +147,7 @@ export default function BookingsScreen({ pendingBookingId, onConsumePendingBooki
                         {STATUS_LABEL[booking.status] ?? booking.status}
                       </span>
                     </div>
+                    {isNext && <span style={styles.nextBadge}>NEXT UP</span>}
                     <p style={styles.meta}>
                       {booking.tierName ?? 'No package'} · {formatDateTime(booking.eventDate)}
                     </p>
@@ -184,6 +209,10 @@ const styles = {
   cardTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   customerName: { fontSize: 16, fontWeight: 700, color: color.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   pill: { padding: '4px 10px', borderRadius: radius.pill, fontSize: 12, fontWeight: 700, flexShrink: 0 },
+  nextBadge: {
+    display: 'inline-block', marginTop: 8, background: color.primarySoft, color: color.primaryDark,
+    fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', padding: '3px 8px', borderRadius: radius.pill,
+  },
   meta: { color: color.muted, marginTop: 6, fontSize: 13 },
   price: { color: color.text, fontWeight: 800, marginTop: 8, fontSize: 15 },
 }
