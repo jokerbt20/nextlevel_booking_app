@@ -1,29 +1,13 @@
-import { color, shadow } from '../theme'
+import { color, radius } from '../theme'
 
-const ITEMS = [
-  { key: 'bookings', label: 'Bookings', icon: '📅' },
-  { key: 'new', label: 'New', icon: '➕' },
-  { key: 'summary', label: 'Summary', icon: '📊' },
-  { key: 'settings', label: 'Settings', icon: '⚙️' },
-]
-
-export default function BottomNav({ tab, setTab }) {
+export default function BottomNav({ tab, setTab, items }) {
   return (
     <div style={styles.bar}>
-      {ITEMS.map((item) => {
+      {items.map((item) => {
         const active = tab === item.key
         return (
-          <button
-            key={item.key}
-            onClick={() => setTab(item.key)}
-            style={styles.button}
-          >
-            <span
-              style={{
-                ...styles.iconWrap,
-                ...(active ? styles.iconWrapActive : {}),
-              }}
-            >
+          <button key={item.key} onClick={() => setTab(item.key)} style={styles.button}>
+            <span style={{ ...styles.iconWrap, ...(active ? styles.iconWrapActive : {}) }}>
               <span style={styles.icon}>{item.icon}</span>
             </span>
             <span style={{ ...styles.label, color: active ? color.primary : color.muted }}>
@@ -60,7 +44,7 @@ const styles = {
     justifyContent: 'center',
     width: 46,
     height: 30,
-    borderRadius: 999,
+    borderRadius: radius.pill,
     transition: 'background 0.15s',
   },
   iconWrapActive: { background: color.primarySoft },

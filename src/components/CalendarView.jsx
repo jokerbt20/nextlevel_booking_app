@@ -186,9 +186,13 @@ export default function CalendarView({ bookings, onSelectBooking, onCreateForDat
             </div>
           )}
 
-          <button style={styles.newButton} onClick={() => onCreateForDate?.(selectedKey)}>
-            + New booking on this day
-          </button>
+          {/* Absent for operators, who cannot create bookings — offering a button
+              the server would refuse is worse than not offering one. */}
+          {onCreateForDate && (
+            <button style={styles.newButton} onClick={() => onCreateForDate(selectedKey)}>
+              + New booking on this day
+            </button>
+          )}
         </div>
       )}
 

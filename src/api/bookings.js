@@ -9,6 +9,13 @@ export const getBookingSummary = () => apiRequest('/admin/bookings/summary')
 export const createAdminBooking = (payload) =>
   apiRequest('/admin/bookings', { method: 'POST', body: payload })
 
+/** Full edit. The server recalculates every price, so no totals are sent. */
+export const updateBooking = (id, payload) =>
+  apiRequest(`/admin/bookings/${id}`, { method: 'PATCH', body: payload })
+
+export const updateBookingNotes = (id, notes) =>
+  apiRequest(`/admin/bookings/${id}/notes`, { method: 'PATCH', body: { notes } })
+
 export const confirmBooking = (id) =>
   apiRequest(`/admin/bookings/${id}/confirm`, { method: 'POST' })
 
