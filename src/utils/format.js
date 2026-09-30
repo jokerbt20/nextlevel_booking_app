@@ -1,16 +1,8 @@
 export function formatCurrency(value) {
   if (value === null || value === undefined) return '—'
-  return `${Math.round(value).toLocaleString()} MKD`
-}
-
-/** Tight form for tiles and chart labels: 128,400 → "128.4k". */
-export function formatCompactCurrency(value) {
-  if (value === null || value === undefined) return '—'
-  const abs = Math.abs(value)
-  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`
-  if (abs >= 10_000) return `${Math.round(value / 1000)}k`
-  if (abs >= 1_000) return `${(value / 1000).toFixed(1)}k`
-  return String(Math.round(value))
+  // Always the full amount with comma thousands (101,987 MKD) — never abbreviated,
+  // and fixed to en-US so a phone set to Macedonian doesn't switch to dots.
+  return `${Math.round(value).toLocaleString('en-US')} MKD`
 }
 
 export function formatPercent(value) {
@@ -47,7 +39,7 @@ export function formatTime(iso) {
   if (!iso) return null
   const d = new Date(iso)
   if (d.getHours() === 0 && d.getMinutes() === 0) return null
-  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
 }
 
 /** 'YYYY-MM-DD' in local time — never via toISOString(), which shifts the day. */
@@ -74,13 +66,63 @@ export const STATUS_LABEL = {
 }
 
 export const STATUS_COLOR = {
-  pending: '#B45309',
-  in_plan: '#7C3AED',
-  confirmed: '#15803D',
+  pending: 'var(--orange)',
+  in_plan: 'var(--purple)',
+  confirmed: 'var(--green)',
 }
 
 export const STATUS_SOFT = {
-  pending: '#FEF3C7',
-  in_plan: '#EDE9FE',
-  confirmed: '#DCFCE7',
+  pending: 'var(--orange-soft)',
+  in_plan: 'var(--purple-soft)',
+  confirmed: 'var(--green-soft)',
 }
+
+/** "Today", "Tomorrow", "Saturday", or "Sat, 4 Oct" — how people talk about a party date. */
+export function formatRelativeDay(iso) {
+  if (!iso) return 'No date set'
+  const d = new Date(iso)
+  const start = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const days = Math.round((start(d) - start(new Date())) / 86_400_000)
+  if (days === 0) return 'Today'
+  if (days === 1) return 'Tomorrow'
+  if (days === -1) return 'Yesterday'
+  if (days > 1 && days < 7) return d.toLocaleDateString(undefined, { weekday: 'long' })
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  return d.toLocaleDateString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  })
+}
+
+/** "in 3 days", "in 5 hours" — only for future dates. */
+export function formatCountdown(iso) {
+  if (!iso) return null
+  const ms = new Date(iso).getTime() - Date.now()
+  if (ms <= 0) return null
+  const hours = Math.round(ms / 3_600_000)
+  if (hours < 1) return 'within the hour'
+  if (hours < 24) return `in ${hours} ${hours === 1 ? 'hour' : 'hours'}`
+  const days = Math.round(hours / 24)
+  return `in ${days} ${days === 1 ? 'day' : 'days'}`
+}
+
+/** Long, friendly date: "Saturday, 4 October 2025". */
+export function formatLongDate(iso) {
+  if (!iso) return 'No date set'
+  return new Date(iso).toLocaleDateString(undefined, {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+/**
+ * A party still going ahead whose order nobody has taken yet — the same rule the
+ * web admin's "Needs call" tile uses. Pending parties are out of scope: there is
+ * nothing to chase until one is at least planned.
+ */
+export const needsCall = (b) =>
+  !b.isOrderComplete && (b.status === 'confirmed' || b.status === 'in_plan')

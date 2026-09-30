@@ -7,10 +7,11 @@ import {
 } from '../api/consumption'
 import { formatCurrency, formatQuantity } from '../utils/format'
 import Header from '../components/Header'
+import Icon from '../components/Icon'
 import { useBackHandler } from '../lib/backStack'
 import ItemPicker from '../components/ItemPicker'
 import { Badge, Button, ErrorState, Section, SkeletonList } from '../components/ui'
-import { color, radius } from '../theme'
+import { color, font, radius } from '../theme'
 
 /**
  * "Drinks & snacks" — what was actually consumed at this birthday, as opposed
@@ -117,7 +118,7 @@ export default function ConsumptionScreen({ booking, onBack, onChanged }) {
   if (isLoading) {
     return (
       <div>
-        <Header title="Drinks & snacks" onBack={onBack} />
+        <Header title="Drinks & Snacks" onBack={onBack} backLabel="Booking" />
         <div style={styles.container}>
           <SkeletonList count={3} />
         </div>
@@ -128,7 +129,7 @@ export default function ConsumptionScreen({ booking, onBack, onChanged }) {
   if (error) {
     return (
       <div>
-        <Header title="Drinks & snacks" onBack={onBack} />
+        <Header title="Drinks & Snacks" onBack={onBack} backLabel="Booking" />
         <ErrorState message={error} onRetry={load} />
       </div>
     )
@@ -143,7 +144,7 @@ export default function ConsumptionScreen({ booking, onBack, onChanged }) {
 
   return (
     <div>
-      <Header title="Drinks & snacks" onBack={onBack} />
+      <Header title="Drinks & Snacks" onBack={onBack} backLabel="Booking" />
       <div style={styles.container}>
         <p style={styles.intro}>
           What was actually eaten and drunk at {customer || 'this party'}. Recording it takes the
@@ -155,8 +156,8 @@ export default function ConsumptionScreen({ booking, onBack, onChanged }) {
           action={includedLines.length > 0 ? <Badge tone="slate">{includedLines.length}</Badge> : null}
         >
           <p style={styles.hint}>Not charged to the customer, but still counted as a cost.</p>
-          <Button variant="neutral" full disabled={busy} onClick={() => setPicker('included')}>
-            + Add items for the kids
+          <Button variant="tinted" full disabled={busy} onClick={() => setPicker('included')}>
+            <Icon name="plus" size={18} strokeWidth={2.4} /> Add Items for the Kids
           </Button>
           <RecordedLines
             lines={includedLines}
@@ -172,8 +173,8 @@ export default function ConsumptionScreen({ booking, onBack, onChanged }) {
           action={chargedLines.length > 0 ? <Badge tone="success">{formatCurrency(chargedTotal)}</Badge> : null}
         >
           <p style={styles.hint}>Stock drops and the line is sold at its price.</p>
-          <Button variant="neutral" full disabled={busy} onClick={() => setPicker('extra')}>
-            + Add items for the adults
+          <Button variant="tinted" full disabled={busy} onClick={() => setPicker('extra')}>
+            <Icon name="plus" size={18} strokeWidth={2.4} /> Add Items for the Adults
           </Button>
           <RecordedLines
             lines={chargedLines}
@@ -187,7 +188,10 @@ export default function ConsumptionScreen({ booking, onBack, onChanged }) {
         {consumption?.warnings?.length > 0 && (
           <Section title="Warnings">
             {consumption.warnings.map((w, i) => (
-              <p key={i} style={styles.warning}>⚠ {w}</p>
+              <p key={i} style={styles.warning}>
+                <Icon name="exclamation" size={16} strokeWidth={2} style={{ display: 'inline', verticalAlign: '-3px', marginRight: 6 }} />
+                {w}
+              </p>
             ))}
           </Section>
         )}
@@ -238,7 +242,7 @@ function RecordedLines({ lines, emptyText, showMoney, busy, onRemove }) {
             aria-label={`Remove ${line.productName}`}
             onClick={() => onRemove(line.movementId, line.productName)}
           >
-            🗑
+            <Icon name="trash" size={20} strokeWidth={1.9} />
           </button>
         </div>
       ))}
@@ -247,17 +251,18 @@ function RecordedLines({ lines, emptyText, showMoney, busy, onRemove }) {
 }
 
 const styles = {
-  container: { padding: 16, paddingBottom: 48, display: 'flex', flexDirection: 'column', gap: 14 },
-  intro: { fontSize: 13, color: color.muted, lineHeight: 1.6 },
-  hint: { fontSize: 12, color: color.faint, lineHeight: 1.5 },
-  empty: { fontSize: 13, color: color.faint, fontStyle: 'italic', marginTop: 6 },
-  warning: { fontSize: 13, color: color.warning, lineHeight: 1.5, fontWeight: 600 },
+  container: { padding: '8px 16px 48px', display: 'flex', flexDirection: 'column', gap: 22 },
+  intro: { ...font.subhead, lineHeight: 1.45, padding: '0 4px' },
+  hint: { ...font.footnote, lineHeight: 1.4 },
+  empty: { ...font.subhead, textAlign: 'center', padding: '4px 0' },
+  warning: { fontSize: 13, color: color.warning, lineHeight: 1.4, fontWeight: 500 },
 
   line: {
     display: 'flex',
     alignItems: 'center',
     gap: 10,
-    padding: '9px 12px',
+    minHeight: 52,
+    padding: '6px 4px 6px 12px',
     borderRadius: radius.md,
     background: color.surfaceMuted,
   },
@@ -269,28 +274,31 @@ const styles = {
     height: 24,
     padding: '0 6px',
     borderRadius: radius.pill,
-    background: color.violet,
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 800,
+    background: color.primarySoft,
+    color: color.primary,
+    fontSize: 11,
+    fontWeight: 700,
     flexShrink: 0,
   },
   lineName: {
     fontSize: 14,
     color: color.text,
-    fontWeight: 600,
+    fontWeight: 500,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  lineMeta: { fontSize: 11, color: color.faint, marginTop: 2 },
-  lineTotal: { fontSize: 13, fontWeight: 700, color: color.success, flexShrink: 0 },
+  lineMeta: { fontSize: 11, color: color.muted, marginTop: 2 },
+  lineTotal: { fontSize: 13, fontWeight: 600, color: color.text, flexShrink: 0 },
   remove: {
+    width: 44,
+    height: 44,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     background: 'none',
     border: 'none',
-    fontSize: 14,
-    padding: 4,
+    color: color.danger,
     flexShrink: 0,
-    opacity: 0.7,
   },
 }

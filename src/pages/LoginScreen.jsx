@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { login as loginRequest } from '../api/auth'
+import Icon from '../components/Icon'
+import { Button } from '../components/ui'
+import { color, font, radius, shadow } from '../theme'
 
 export default function LoginScreen() {
   const { login } = useAuth()
@@ -22,50 +25,68 @@ export default function LoginScreen() {
       const result = await loginRequest(username.trim(), password)
       login(result.accessToken, result.refreshToken, result.user)
     } catch (err) {
-      setError(err.message || 'Invalid username or password.')
+      setError(err.message || 'That username and password don’t match. Check them and try again.')
     } finally {
       setIsLoading(false)
     }
   }
 
+  const canSubmit = username.trim() && password && !isLoading
+
   return (
     <div style={styles.container}>
-      <form style={styles.form} onSubmit={handleSubmit}>
-        <div style={styles.mark}>NL</div>
+      <form style={styles.form} onSubmit={handleSubmit} noValidate>
+        <div style={styles.mark} aria-hidden="true">NL</div>
         <h1 style={styles.title}>NextLevel</h1>
-        <p style={styles.subtitle}>Booking Manager</p>
+        <p style={styles.subtitle}>Sign in to manage parties and bookings.</p>
 
-        <label style={styles.label}>Username</label>
-        <input
-          style={styles.input}
-          autoCapitalize="none"
-          autoCorrect="off"
-          autoComplete="username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="admin"
-        />
-
-        <label style={styles.label}>Password</label>
-        <div style={styles.passwordWrap}>
-          <input
-            style={{ ...styles.input, paddingRight: 62 }}
-            type={showPassword ? 'text' : 'password'}
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-          />
-          <button type="button" style={styles.reveal} onClick={() => setShowPassword((v) => !v)}>
-            {showPassword ? 'Hide' : 'Show'}
-          </button>
+        {/* One grouped card for both fields, like the system sign-in sheets. */}
+        <div style={styles.fields}>
+          <label style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Username</span>
+            <input
+              style={styles.input}
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="username"
+              enterKeyHint="next"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="Required"
+            />
+          </label>
+          <div style={styles.separator} />
+          <label style={styles.fieldRow}>
+            <span style={styles.fieldLabel}>Password</span>
+            <input
+              style={styles.input}
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              enterKeyHint="go"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Required"
+            />
+            <button
+              type="button"
+              style={styles.reveal}
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
+            >
+              <Icon name={showPassword ? 'eyeSlash' : 'eye'} size={20} strokeWidth={1.9} />
+            </button>
+          </label>
         </div>
 
-        {error && <p style={styles.error}>{error}</p>}
+        {error && (
+          <p style={styles.error} role="alert">
+            {error}
+          </p>
+        )}
 
-        <button type="submit" style={{ ...styles.button, opacity: isLoading ? 0.6 : 1 }} disabled={isLoading}>
-          {isLoading ? 'Signing in…' : 'Sign in'}
-        </button>
+        <Button type="submit" full disabled={!canSubmit} style={{ marginTop: 24 }}>
+          {isLoading ? 'Signing In…' : 'Sign In'}
+        </Button>
 
         <p style={styles.footnote}>You stay signed in on this device until you log out.</p>
       </form>
@@ -79,68 +100,63 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'radial-gradient(120% 90% at 50% 0%, #1E293B 0%, #0F172A 60%)',
-    padding: 24,
+    background: color.bg,
+    padding: '24px 20px',
+    paddingTop: 'calc(var(--safe-area-inset-top, env(safe-area-inset-top, 0px)) + 24px)',
   },
-  form: { width: '100%', maxWidth: 340 },
+  form: { width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column' },
   mark: {
-    width: 60,
-    height: 60,
-    borderRadius: 18,
+    width: 76,
+    height: 76,
+    borderRadius: 20,
     margin: '0 auto 20px',
-    background: 'linear-gradient(135deg, #2563EB 0%, #4F46E5 100%)',
+    background: color.primary,
     color: '#fff',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: 22,
-    fontWeight: 800,
-    letterSpacing: '0.02em',
-    boxShadow: '0 10px 30px rgba(37,99,235,0.4)',
+    fontSize: 21,
+    fontWeight: 700,
+    boxShadow: shadow.lg,
   },
-  title: { fontSize: 32, fontWeight: 800, color: '#fff', textAlign: 'center', letterSpacing: '-0.02em' },
-  subtitle: { fontSize: 15, color: '#94A3B8', textAlign: 'center', marginTop: 6, marginBottom: 36 },
-  label: { display: 'block', color: '#CBD5E1', fontSize: 12, fontWeight: 700, marginBottom: 7, marginTop: 18 },
+  title: { ...font.largeTitle, textAlign: 'center' },
+  subtitle: { ...font.subhead, fontSize: 14, textAlign: 'center', marginTop: 6, marginBottom: 32 },
+
+  fields: {
+    background: color.surface,
+    borderRadius: radius.lg,
+    boxShadow: shadow.sm,
+    overflow: 'hidden',
+  },
+  fieldRow: { display: 'flex', alignItems: 'center', minHeight: 52, padding: '0 8px 0 16px', gap: 8 },
+  fieldLabel: { width: 92, flexShrink: 0, fontSize: 14, color: color.text },
+  separator: { height: 0.5, background: color.border, marginLeft: 16 },
   input: {
-    width: '100%',
-    background: '#1E293B',
-    color: '#fff',
-    borderRadius: 12,
-    padding: '13px 15px',
-    fontSize: 16, // 16px stops mobile browsers zooming the page on focus
-    border: '1px solid #334155',
-    boxSizing: 'border-box',
-  },
-  passwordWrap: { position: 'relative', display: 'flex', alignItems: 'center' },
-  reveal: {
-    position: 'absolute',
-    right: 8,
+    flex: 1,
+    minWidth: 0,
+    minHeight: 50,
     background: 'transparent',
     border: 'none',
-    color: '#7DA2E8',
-    fontSize: 13,
-    fontWeight: 700,
-    padding: '8px 8px',
+    fontSize: 14,
+    color: color.text,
+  },
+  reveal: {
+    width: 44,
+    height: 44,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'transparent',
+    border: 'none',
+    color: color.muted,
+    flexShrink: 0,
   },
   error: {
-    color: '#FCA5A5',
-    background: 'rgba(220,38,38,0.14)',
-    borderRadius: 10,
-    padding: '11px 13px',
-    marginTop: 18,
-    fontSize: 14,
-    fontWeight: 600,
+    color: color.danger,
+    fontSize: 13,
+    lineHeight: 1.4,
+    marginTop: 12,
+    padding: '0 16px',
   },
-  button: {
-    width: '100%',
-    background: 'linear-gradient(135deg, #2563EB 0%, #4F46E5 100%)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: 12,
-    padding: '15px 0',
-    fontSize: 16,
-    fontWeight: 700,
-    marginTop: 26,
-  },
-  footnote: { color: '#64748B', fontSize: 12, textAlign: 'center', marginTop: 18, lineHeight: 1.5 },
+  footnote: { ...font.footnote, textAlign: 'center', marginTop: 16, lineHeight: 1.45 },
 }

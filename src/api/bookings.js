@@ -27,3 +27,16 @@ export const rescheduleBooking = (id, eventDate) =>
 
 export const cancelBooking = (id) =>
   apiRequest(`/admin/bookings/${id}`, { method: 'DELETE' })
+
+/**
+ * Whether the customer has finished saying what they want (food, extras).
+ * Independent of status: a confirmed party can still need a call. Admin only.
+ */
+export const setOrderComplete = (id, isOrderComplete) =>
+  apiRequest(`/admin/bookings/${id}/order-complete`, { method: 'PATCH', body: { isOrderComplete } })
+
+/**
+ * What to order from each supplier for this birthday — names and quantities
+ * only, no prices, so operators may use it too (Admin + Operator server-side).
+ */
+export const getSupplierOrder = (id) => apiRequest(`/bookings/${id}/supplier-order`)

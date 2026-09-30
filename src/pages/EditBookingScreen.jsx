@@ -1,5 +1,5 @@
 import BookingForm from '../components/BookingForm'
-import Header from '../components/Header'
+import Header, { BarButton } from '../components/Header'
 import { useBackHandler } from '../lib/backStack'
 
 export default function EditBookingScreen({ booking, onSaved, onCancel }) {
@@ -8,8 +8,12 @@ export default function EditBookingScreen({ booking, onSaved, onCancel }) {
 
   const name = [booking.customerName, booking.customerLastName].filter(Boolean).join(' ')
   return (
-    <div>
-      <Header title={name ? `Edit · ${name}` : 'Edit booking'} onBack={onCancel} />
+    <div className="anim-screen">
+      <Header
+        title={name || 'Edit Booking'}
+        large={false}
+        left={<BarButton onClick={onCancel}>Cancel</BarButton>}
+      />
       <BookingForm booking={booking} onSaved={onSaved} onCancel={onCancel} />
     </div>
   )

@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
-import { formatCurrency, formatTime, STATUS_COLOR, STATUS_LABEL } from '../utils/format'
-import { color, radius, shadow } from '../theme'
+import { useTiers } from '../lib/tiers'
+import { color, font, radius, shadow } from '../theme'
+import BookingRow from './BookingRow'
+import Icon from './Icon'
 
 // Week starts Monday (local convention). getDay(): 0 = Sun … 6 = Sat.
 const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
@@ -17,14 +19,50 @@ function bookingTimeValue(b) {
   return mins === 0 ? Infinity : mins // untimed sinks to the bottom
 }
 
-export default function CalendarView({ bookings, onSelectBooking, onCreateForDate }) {
+export default function CalendarView({ bookings, onSelectBooking, onCreateForDate, tierColor = () => undefined }) {
   const today = new Date()
   const [viewDate, setViewDate] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1))
   const [selectedKey, setSelectedKey] = useState(() => dateKey(today))
+  // null = every package; otherwise a tier id, or 'none' for bookings without one.
+  const [tierFilter, setTierFilter] = useState(null)
+  const tiers = useTiers()
+
+  const tierKey = (b) => (b.tierId == null ? 'none' : b.tierId)
+  const visible = useMemo(
+    () => (tierFilter == null ? bookings : bookings.filter((b) => tierKey(b) === tierFilter)),
+    [bookings, tierFilter],
+  )
+
+  // Counts are for the month on screen, across every package, so the chips read
+  // as a tally: "Basic 6 · Pro 4 · Expert 2" for October.
+  const monthChips = useMemo(() => {
+    const y = viewDate.getFullYear()
+    const m = viewDate.getMonth()
+    const inMonth = bookings.filter((b) => {
+      if (!b.eventDate) return false
+      const d = new Date(b.eventDate)
+      return d.getFullYear() === y && d.getMonth() === m
+    })
+    const count = (key) => inMonth.filter((b) => tierKey(b) === key).length
+    // The server's tier order first (Basic, Pro, Expert…), then any retired tier
+    // still on an old booking, then bookings with no package.
+    const list = tiers.map((t) => ({ key: t.id, name: t.name, color: t.color, count: count(t.id) }))
+    for (const b of inMonth) {
+      if (b.tierId != null && !list.some((c) => c.key === b.tierId)) {
+        list.push({ key: b.tierId, name: b.tierName ?? 'Package', color: tierColor(b.tierId) ?? 'var(--label-3)', count: count(b.tierId) })
+      }
+    }
+    const none = count('none')
+    if (none > 0) list.push({ key: 'none', name: 'No package', color: 'var(--label-3)', count: none })
+    return { total: inMonth.length, list }
+  }, [bookings, tiers, viewDate]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const dotColor = (b) =>
+    b.tierId == null ? 'var(--label-3)' : (tiers.find((t) => t.id === b.tierId)?.color ?? tierColor(b.tierId) ?? 'var(--label-3)')
 
   const byDate = useMemo(() => {
     const map = {}
-    for (const b of bookings) {
+    for (const b of visible) {
       if (!b.eventDate) continue
       const key = b.eventDate.slice(0, 10)
       ;(map[key] ??= []).push(b)
@@ -33,9 +71,9 @@ export default function CalendarView({ bookings, onSelectBooking, onCreateForDat
       map[key].sort((a, b) => bookingTimeValue(a) - bookingTimeValue(b))
     }
     return map
-  }, [bookings])
+  }, [visible])
 
-  const undated = bookings.filter((b) => !b.eventDate)
+  const undated = visible.filter((b) => !b.eventDate)
 
   const cells = useMemo(() => {
     const year = viewDate.getFullYear()
@@ -66,16 +104,43 @@ export default function CalendarView({ bookings, onSelectBooking, onCreateForDat
 
   return (
     <div>
-      {/* Month navigation */}
+      {/* Month navigation — title leads, arrows and Today trail, as in Calendar. */}
       <div style={styles.nav}>
-        <button style={styles.navButton} onClick={() => changeMonth(-1)} aria-label="Previous month">‹</button>
-        <div style={styles.navCenter}>
-          <span style={styles.navTitle}>
-            {viewDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
-          </span>
-          <button style={styles.todayButton} onClick={goToday}>Today</button>
+        <span style={styles.navTitle}>
+          {viewDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+        </span>
+        <div style={styles.navActions}>
+          <button type="button" style={styles.todayButton} onClick={goToday}>
+            Today
+          </button>
+          <button type="button" style={styles.navButton} onClick={() => changeMonth(-1)} aria-label="Previous month">
+            <Icon name="chevronLeft" size={20} strokeWidth={2.4} />
+          </button>
+          <button type="button" style={styles.navButton} onClick={() => changeMonth(1)} aria-label="Next month">
+            <Icon name="chevronRight" size={20} strokeWidth={2.4} />
+          </button>
         </div>
-        <button style={styles.navButton} onClick={() => changeMonth(1)} aria-label="Next month">›</button>
+      </div>
+
+      {/* Package filter + tally for the month on screen. Dots on the grid take
+          the same package colours, so the chips double as the legend. */}
+      <div className="no-scrollbar" style={styles.tierRow} role="radiogroup" aria-label="Filter by package">
+        <TierChip
+          label="All"
+          count={monthChips.total}
+          active={tierFilter == null}
+          onClick={() => setTierFilter(null)}
+        />
+        {monthChips.list.map((c) => (
+          <TierChip
+            key={c.key}
+            label={c.name}
+            count={c.count}
+            dot={c.color}
+            active={tierFilter === c.key}
+            onClick={() => setTierFilter(tierFilter === c.key ? null : c.key)}
+          />
+        ))}
       </div>
 
       {/* Month grid card */}
@@ -94,42 +159,35 @@ export default function CalendarView({ bookings, onSelectBooking, onCreateForDat
             const isToday = key === todayKey
             const isSelected = key === selectedKey
             const isWeekend = date.getDay() === 0 || date.getDay() === 6
+            const label =
+              date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' }) +
+              (dayBookings.length
+                ? `, ${dayBookings.length} ${dayBookings.length === 1 ? 'booking' : 'bookings'}`
+                : '')
             return (
               <button
                 key={idx}
+                type="button"
                 onClick={() => setSelectedKey(key)}
-                style={{
-                  ...styles.cell,
-                  ...styles.dayCell,
-                  ...(isWeekend && !isSelected ? styles.weekendCell : {}),
-                  ...(isToday && !isSelected ? styles.today : {}),
-                  ...(isSelected ? styles.selected : {}),
-                }}
+                aria-pressed={isSelected}
+                aria-label={label}
+                style={{ ...styles.cell, ...styles.dayCell }}
               >
                 <span
                   style={{
                     ...styles.dayNumber,
-                    ...(isSelected ? { color: '#fff' } : isToday ? { color: color.primary } : {}),
+                    ...(isWeekend ? { color: color.muted } : {}),
+                    ...(isToday ? styles.todayNumber : {}),
+                    ...(isSelected ? (isToday ? styles.selectedToday : styles.selectedNumber) : {}),
                   }}
                 >
                   {date.getDate()}
                 </span>
-                <div style={styles.dotRow}>
+                <span style={styles.dotRow}>
                   {dayBookings.slice(0, 3).map((b, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        ...styles.dot,
-                        background: isSelected ? 'rgba(255,255,255,0.9)' : (STATUS_COLOR[b.status] ?? '#94A3B8'),
-                      }}
-                    />
+                    <span key={i} style={{ ...styles.dot, background: dotColor(b) }} />
                   ))}
-                  {dayBookings.length > 3 && (
-                    <span style={{ ...styles.moreDots, color: isSelected ? '#fff' : color.faint }}>
-                      +{dayBookings.length - 3}
-                    </span>
-                  )}
-                </div>
+                </span>
               </button>
             )
           })}
@@ -138,132 +196,198 @@ export default function CalendarView({ bookings, onSelectBooking, onCreateForDat
 
       {/* Selected-day agenda */}
       {selectedDate && (
-        <div style={styles.agenda}>
+        <section style={{ marginTop: 20 }}>
           <div style={styles.agendaHeader}>
-            <div>
-              <p style={styles.agendaWeekday}>
-                {selectedDate.toLocaleDateString(undefined, { weekday: 'long' })}
-              </p>
-              <p style={styles.agendaDate}>
-                {selectedDate.toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}
-              </p>
-            </div>
+            <p style={styles.agendaDate}>
+              {selectedDate.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
+            </p>
             {selectedBookings.length > 0 && (
-              <span style={styles.countBadge}>
+              <span style={styles.countText}>
                 {selectedBookings.length} {selectedBookings.length === 1 ? 'booking' : 'bookings'}
               </span>
             )}
           </div>
 
-          {selectedBookings.length === 0 ? (
-            <div style={styles.emptyDay}>
-              <span style={styles.emptyEmoji}>🎈</span>
-              <p style={styles.emptyText}>No bookings on this day</p>
-            </div>
-          ) : (
-            <div style={styles.agendaList}>
-              {selectedBookings.map((b) => {
-                const name = [b.customerName, b.customerLastName].filter(Boolean).join(' ') || 'Unknown customer'
-                const time = formatTime(b.eventDate)
-                const statusColor = STATUS_COLOR[b.status] ?? '#6B7280'
-                return (
-                  <button key={b.id} style={styles.agendaRow} onClick={() => onSelectBooking(b.id)}>
-                    <div style={{ ...styles.timeChip, borderColor: statusColor }}>
-                      <span style={{ ...styles.timeText, color: statusColor }}>{time ?? '—'}</span>
-                    </div>
-                    <div style={styles.agendaInfo}>
-                      <p style={styles.agendaName}>{name}</p>
-                      <p style={styles.agendaMeta}>
-                        {b.tierName ?? 'No package'} · {formatCurrency(b.totalPrice)}
-                      </p>
-                    </div>
-                    <span style={{ ...styles.pill, background: statusColor }}>
-                      {STATUS_LABEL[b.status] ?? b.status}
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          )}
+          <div className="cell-list" style={styles.agenda}>
+            {selectedBookings.length === 0 ? (
+              <div style={styles.emptyDay}>
+                <Icon name="balloon" size={26} strokeWidth={1.8} style={{ color: color.faint }} />
+                <p style={styles.emptyText}>No bookings on this day</p>
+              </div>
+            ) : (
+              selectedBookings.map((b) => (
+                <BookingRow key={b.id} booking={b} accent={tierColor(b.tierId)} onClick={() => onSelectBooking(b.id)} />
+              ))
+            )}
 
-          {/* Absent for operators, who cannot create bookings — offering a button
-              the server would refuse is worse than not offering one. */}
-          {onCreateForDate && (
-            <button style={styles.newButton} onClick={() => onCreateForDate(selectedKey)}>
-              + New booking on this day
-            </button>
-          )}
-        </div>
+            {/* Absent for operators, who cannot create bookings — offering a button
+                the server would refuse is worse than not offering one. */}
+            {onCreateForDate && (
+              <button
+                type="button"
+                className="cell-button"
+                style={styles.newRow}
+                onClick={() => onCreateForDate(selectedKey)}
+              >
+                <Icon name="plus" size={20} strokeWidth={2.3} />
+                New Booking on This Day
+              </button>
+            )}
+          </div>
+        </section>
       )}
 
       {undated.length > 0 && (
-        <p style={styles.undatedNote}>{undated.length} booking(s) have no date set yet.</p>
+        <p style={styles.undatedNote}>
+          {undated.length} {undated.length === 1 ? 'booking has' : 'bookings have'} no date yet. Find them in the
+          list view.
+        </p>
       )}
     </div>
   )
 }
 
+function TierChip({ label, count, dot, active, onClick }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={active}
+      onClick={onClick}
+      style={{
+        ...styles.tierChip,
+        ...(active
+          ? {
+              // Darkened a touch so white text stays readable on light package colours.
+              background: dot ? `color-mix(in srgb, ${dot} 82%, black)` : color.text,
+              color: dot ? '#fff' : color.bg,
+              boxShadow: 'none',
+            }
+          : {}),
+      }}
+    >
+      {dot && (
+        <span
+          style={{
+            ...styles.tierDot,
+            background: active ? '#fff' : dot,
+          }}
+        />
+      )}
+      {label}
+      <span
+        style={{
+          ...styles.tierCount,
+          ...(active ? { background: 'rgba(255,255,255,0.28)', color: '#fff' } : {}),
+        }}
+      >
+        {count}
+      </span>
+    </button>
+  )
+}
+
 const styles = {
-  nav: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px 12px' },
+  tierRow: { display: 'flex', gap: 8, overflowX: 'auto', margin: '0 -16px 10px', padding: '0 16px 2px' },
+  tierChip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 34,
+    padding: '0 6px 0 12px',
+    borderRadius: radius.pill,
+    border: 'none',
+    background: color.surface,
+    boxShadow: 'inset 0 0 0 0.5px var(--separator)',
+    color: color.text,
+    fontSize: 13,
+    fontWeight: 600,
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  },
+  tierDot: { width: 9, height: 9, borderRadius: 5, flexShrink: 0 },
+  tierCount: {
+    minWidth: 22,
+    textAlign: 'center',
+    padding: '1px 7px',
+    borderRadius: radius.pill,
+    background: color.surfaceMuted,
+    color: color.muted,
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  nav: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 4px 10px' },
+  navTitle: { fontSize: 17, lineHeight: '22px', fontWeight: 700, color: color.text },
+  navActions: { display: 'flex', alignItems: 'center', gap: 2 },
   navButton: {
-    background: color.surface, border: `1px solid ${color.border}`, borderRadius: radius.pill,
-    width: 38, height: 38, fontSize: 20, color: color.text, boxShadow: shadow.sm,
+    width: 44,
+    height: 44,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'none',
+    border: 'none',
+    color: color.primary,
   },
-  navCenter: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 },
-  navTitle: { fontSize: 17, fontWeight: 700, color: color.text },
   todayButton: {
-    background: 'none', border: 'none', color: color.primary, fontSize: 12, fontWeight: 700, padding: 0,
+    minHeight: 32,
+    padding: '0 12px',
+    marginRight: 4,
+    borderRadius: radius.pill,
+    background: color.primarySoft,
+    border: 'none',
+    color: color.primary,
+    fontSize: 13,
+    fontWeight: 600,
   },
-  calendarCard: {
-    background: color.surface, borderRadius: radius.lg, padding: 12, boxShadow: shadow.md,
-  },
-  weekRow: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 6 },
-  weekday: { textAlign: 'center', fontSize: 11, fontWeight: 700, color: color.faint, textTransform: 'uppercase' },
-  weekendLabel: { color: color.primary, opacity: 0.75 },
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 },
-  cell: { aspectRatio: '1', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  calendarCard: { background: color.surface, borderRadius: radius.lg, padding: '12px 8px', boxShadow: shadow.sm },
+  weekRow: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 4 },
+  weekday: { textAlign: 'center', fontSize: 11, fontWeight: 600, color: color.muted },
+  weekendLabel: { color: color.faint },
+  grid: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', rowGap: 2 },
+  cell: { minHeight: 48, display: 'flex', alignItems: 'center', justifyContent: 'center' },
   dayCell: {
-    flexDirection: 'column', background: 'transparent', border: 'none',
-    borderRadius: radius.md, position: 'relative', gap: 3, padding: 0, cursor: 'pointer',
+    flexDirection: 'column',
+    background: 'transparent',
+    border: 'none',
+    gap: 3,
+    padding: 0,
   },
-  weekendCell: { background: color.surfaceMuted },
-  today: { boxShadow: `inset 0 0 0 2px ${color.primary}` },
-  selected: { background: color.primary, boxShadow: shadow.md },
-  dayNumber: { fontSize: 14, fontWeight: 600, color: color.text },
-  dotRow: { display: 'flex', alignItems: 'center', gap: 2, height: 6 },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  moreDots: { fontSize: 8, fontWeight: 700, lineHeight: 1 },
-  agenda: {
-    marginTop: 16, background: color.surface, borderRadius: radius.lg, padding: 16,
-    boxShadow: shadow.md, display: 'flex', flexDirection: 'column', gap: 12,
+  dayNumber: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: 15,
+    fontWeight: 400,
+    color: color.text,
   },
-  agendaHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' },
-  agendaWeekday: { fontSize: 13, fontWeight: 600, color: color.muted },
-  agendaDate: { fontSize: 20, fontWeight: 800, color: color.text, marginTop: 1 },
-  countBadge: {
-    background: color.primarySoft, color: color.primaryDark, fontSize: 12, fontWeight: 700,
-    padding: '5px 10px', borderRadius: radius.pill,
+  todayNumber: { color: color.danger, fontWeight: 600 },
+  selectedNumber: { background: color.text, color: color.surface, fontWeight: 600 },
+  selectedToday: { background: color.danger, color: '#fff', fontWeight: 600 },
+  dotRow: { display: 'flex', alignItems: 'center', gap: 3, height: 5 },
+  dot: { width: 5, height: 5, borderRadius: 3 },
+
+  agendaHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0 4px 8px' },
+  agendaDate: { fontSize: 16, lineHeight: '21px', fontWeight: 700, color: color.text },
+  countText: { ...font.subhead },
+  agenda: { background: color.surface, borderRadius: radius.lg, boxShadow: shadow.sm, overflow: 'hidden' },
+  emptyDay: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '24px 0 20px' },
+  emptyText: { ...font.subhead },
+  newRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
+    minHeight: 50,
+    padding: '0 16px',
+    background: 'transparent',
+    border: 'none',
+    color: color.primary,
+    fontSize: 14,
+    textAlign: 'left',
   },
-  emptyDay: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, padding: '18px 0 6px' },
-  emptyEmoji: { fontSize: 30 },
-  emptyText: { color: color.faint, fontSize: 14, fontWeight: 500 },
-  agendaList: { display: 'flex', flexDirection: 'column', gap: 8 },
-  agendaRow: {
-    display: 'flex', alignItems: 'center', gap: 12, background: color.surfaceMuted,
-    border: 'none', borderRadius: radius.md, padding: 10, textAlign: 'left',
-  },
-  timeChip: {
-    minWidth: 56, padding: '6px 4px', borderRadius: radius.sm, border: '1.5px solid',
-    background: color.surface, display: 'flex', justifyContent: 'center', alignItems: 'center',
-  },
-  timeText: { fontSize: 14, fontWeight: 800, letterSpacing: '-0.02em' },
-  agendaInfo: { flex: 1, minWidth: 0 },
-  agendaName: { fontSize: 15, fontWeight: 700, color: color.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  agendaMeta: { fontSize: 12, color: color.muted, marginTop: 2 },
-  pill: { padding: '4px 9px', borderRadius: radius.pill, color: '#fff', fontSize: 11, fontWeight: 700 },
-  newButton: {
-    marginTop: 2, background: color.primary, color: '#fff', border: 'none',
-    borderRadius: radius.md, padding: '13px 0', fontSize: 15, fontWeight: 700, boxShadow: shadow.sm,
-  },
-  undatedNote: { textAlign: 'center', color: color.faint, fontSize: 12, marginTop: 14 },
+  undatedNote: { ...font.footnote, textAlign: 'center', marginTop: 14, padding: '0 16px' },
 }

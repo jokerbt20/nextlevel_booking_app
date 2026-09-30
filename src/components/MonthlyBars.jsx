@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { formatCompactCurrency, formatCurrency, formatPercent, formatQuantity } from '../utils/format'
+import { formatCurrency, formatPercent, formatQuantity } from '../utils/format'
 import { color, radius } from '../theme'
 import { Badge } from './ui'
 
@@ -20,8 +20,8 @@ import { Badge } from './ui'
 // normal-vision ΔE 33.6, both ≥ 3:1 on white). Loss uses the reserved critical
 // status colour and always ships with a label, never colour alone.
 const SERIES = {
-  cost: '#2a78d6',
-  profit: '#eb6834',
+  cost: 'var(--series-1)',
+  profit: 'var(--series-2)',
   loss: color.danger,
 }
 
@@ -45,7 +45,7 @@ export default function MonthlyBars({ months }) {
       </div>
 
       <div style={styles.rows}>
-        {rows.map((m) => {
+        {rows.map((m, idx) => {
           const key = `${m.year}-${m.month}`
           const isOpen = openKey === key
           const isLoss = m.profit < 0
@@ -70,11 +70,12 @@ export default function MonthlyBars({ months }) {
                     )}
                   </span>
                   <span style={{ ...styles.revenue, color: isLoss ? color.danger : color.text }}>
-                    {formatCompactCurrency(m.revenue)}
+                    {formatCurrency(m.revenue)}
                   </span>
                 </div>
 
                 <div style={styles.track}>
+                  <div className="anim-grow" style={{ display: 'flex', width: '100%', height: '100%', animationDelay: `${idx * 60}ms` }}>
                   {costPct > 0 && (
                     <span
                       style={{
@@ -105,6 +106,7 @@ export default function MonthlyBars({ months }) {
                       }}
                     />
                   )}
+                  </div>
                 </div>
 
                 <div style={styles.rowFoot}>
@@ -113,8 +115,8 @@ export default function MonthlyBars({ months }) {
                     {m.unconfirmedEvents > 0 ? ` · ${m.unconfirmedEvents} unconfirmed` : ''}
                   </span>
                   <span style={styles.foot}>
-                    {isLoss ? '⚠ loss ' : ''}
-                    {formatCompactCurrency(m.profit)} · {formatPercent(m.marginPercent)}
+                    {isLoss ? 'Loss · ' : ''}
+                    {formatCurrency(m.profit)} · {formatPercent(m.marginPercent)}
                   </span>
                 </div>
               </button>
@@ -158,7 +160,7 @@ function LegendItem({ swatch, hatched, label }) {
 
 const styles = {
   legend: { display: 'flex', gap: 14, marginBottom: 14, flexWrap: 'wrap' },
-  legendItem: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: color.muted, fontWeight: 600 },
+  legendItem: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: color.muted },
   swatch: { width: 11, height: 11, borderRadius: 3, display: 'inline-block' },
 
   rows: { display: 'flex', flexDirection: 'column', gap: 14 },
@@ -171,8 +173,8 @@ const styles = {
     padding: 0,
   },
   rowHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },
-  month: { fontSize: 13, fontWeight: 700, color: color.text },
-  revenue: { fontSize: 13, fontWeight: 800 },
+  month: { fontSize: 13, fontWeight: 600, color: color.text },
+  revenue: { fontSize: 13, fontWeight: 600 },
 
   track: {
     display: 'flex',
@@ -185,7 +187,7 @@ const styles = {
   seg: { display: 'block', height: '100%' },
 
   rowFoot: { display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 6 },
-  foot: { fontSize: 11, color: color.faint, fontWeight: 600 },
+  foot: { fontSize: 11, color: color.muted },
 
   drill: {
     background: color.surfaceMuted,
@@ -194,15 +196,15 @@ const styles = {
     marginTop: 10,
   },
   drillTitle: {
-    fontSize: 10,
-    fontWeight: 800,
-    color: color.faint,
+    fontSize: 11,
+    fontWeight: 600,
+    color: color.muted,
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
     marginBottom: 8,
   },
   drillRow: { display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0' },
   drillName: { fontSize: 13, color: color.text, minWidth: 0 },
-  drillQty: { color: color.faint },
-  drillCost: { fontSize: 13, fontWeight: 700, color: color.text, flexShrink: 0 },
+  drillQty: { color: color.muted },
+  drillCost: { fontSize: 13, fontWeight: 600, color: color.text, flexShrink: 0 },
 }

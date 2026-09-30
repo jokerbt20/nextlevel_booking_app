@@ -112,3 +112,22 @@ export const fromAdminProduct = (p) => ({
   audience: p.audience === 'adults' ? 'adults' : 'kids',
   categoryName: p.categoryName,
 })
+
+/**
+ * The three things the kitchen reads a booking for: pizzas, platters (даски),
+ * and everything else. Platters are matched on the name because they are spread
+ * over more than one menu category ("Мешана даска", "Похована даска", …).
+ */
+export const FOOD_GROUPS = [
+  { key: 'pizza', label: 'Pizzas', icon: 'pizza', tint: 'var(--orange)' },
+  { key: 'daska', label: 'Даски', icon: 'box', tint: 'var(--pink)' },
+  { key: 'other', label: 'Other', icon: 'cup', tint: 'var(--purple)' },
+]
+
+export function foodGroupOf(line) {
+  const category = (line.categoryName ?? line.category ?? '').trim()
+  const name = (line.name ?? '').toLowerCase()
+  if (category === PIZZA_CATEGORY || name.startsWith('пица')) return 'pizza'
+  if (name.includes('даска') || category.toLowerCase().includes('даск')) return 'daska'
+  return 'other'
+}

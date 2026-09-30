@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { formatCurrency } from '../utils/format'
-import { color, radius } from '../theme'
-import { Button, Input, Sheet, Stepper } from './ui'
+import { color, font, radius } from '../theme'
+import Icon from './Icon'
+import { Button, SearchField, Sheet, Stepper } from './ui'
 
 /** Items with no category still need a tab, and "Друго" beats a blank one. */
 const UNCATEGORISED = 'Друго'
@@ -81,7 +82,7 @@ export default function ItemPicker({
       onClose={onClose}
       footer={
         <div style={styles.footer}>
-          <Button variant="ghost" style={{ flex: 1 }} onClick={onClose}>
+          <Button variant="neutral" style={{ flex: 1 }} onClick={onClose}>
             Cancel
           </Button>
           <Button style={{ flex: 2 }} onClick={() => onConfirm(draft)}>
@@ -91,7 +92,7 @@ export default function ItemPicker({
       }
     >
       {/* ── Category tabs ─────────────────────────────────────────── */}
-      <div style={styles.tabRow}>
+      <div className="no-scrollbar" style={styles.tabRow}>
         <CategoryChip
           active={!category && !term}
           count={totalItems}
@@ -117,15 +118,7 @@ export default function ItemPicker({
         ))}
       </div>
 
-      <div style={styles.searchWrap}>
-        <span style={styles.searchIcon}>🔍</span>
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search…"
-          style={{ paddingLeft: 38 }}
-        />
-      </div>
+      <SearchField value={search} onChange={setSearch} placeholder="Search items" style={{ marginBottom: 12 }} />
 
       {/* ── The list ──────────────────────────────────────────────── */}
       <div style={styles.list}>
@@ -152,7 +145,7 @@ export default function ItemPicker({
 
       {/* ── Running order ─────────────────────────────────────────── */}
       <div style={styles.basket}>
-        <p style={styles.basketTitle}>🧺 Chosen</p>
+        <p style={styles.basketTitle}>Chosen</p>
         {chosen.length === 0 ? (
           <p style={styles.basketEmpty}>Nothing chosen yet.</p>
         ) : (
@@ -168,14 +161,14 @@ export default function ItemPicker({
                   aria-label={`Remove ${item.name}`}
                   onClick={() => setQty(key, 0)}
                 >
-                  ✕
+                  <Icon name="xmark" size={14} strokeWidth={2.6} />
                 </button>
               </div>
             ))}
             {showPrice && (
               <div style={styles.basketTotal}>
                 <span style={{ color: color.muted }}>Total</span>
-                <span style={{ fontWeight: 800, color: color.text }}>{formatCurrency(total)}</span>
+                <span style={{ fontWeight: 700, color: color.text }}>{formatCurrency(total)}</span>
               </div>
             )}
           </>
@@ -200,102 +193,96 @@ function CategoryChip({ active, count, onClick, children }) {
 }
 
 const styles = {
-  footer: { display: 'flex', gap: 10, marginTop: 14 },
+  footer: { display: 'flex', gap: 10, marginTop: 16 },
 
-  tabRow: { display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 10 },
+  tabRow: { display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 12 },
   chip: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: 6,
     whiteSpace: 'nowrap',
     flexShrink: 0,
-    padding: '8px 14px',
+    minHeight: 36,
+    padding: '0 14px',
     borderRadius: radius.pill,
-    border: `1px solid ${color.border}`,
-    background: color.surface,
-    color: color.muted,
-    fontWeight: 700,
+    border: 'none',
+    background: color.surfaceMuted,
+    color: color.text,
+    fontWeight: 500,
     fontSize: 13,
   },
-  chipActive: { background: color.primary, borderColor: color.primary, color: '#fff' },
+  chipActive: { background: color.text, color: color.surface, fontWeight: 600 },
   chipCount: {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 18,
-    height: 18,
-    padding: '0 5px',
+    minWidth: 20,
+    height: 20,
+    padding: '0 6px',
     borderRadius: radius.pill,
-    background: color.violet,
-    color: '#fff',
+    background: color.primary,
+    color: color.onPrimary,
     fontSize: 11,
-    fontWeight: 800,
+    fontWeight: 700,
   },
 
-  searchWrap: { position: 'relative', display: 'flex', alignItems: 'center', marginBottom: 10 },
-  searchIcon: { position: 'absolute', left: 14, fontSize: 14, opacity: 0.55, pointerEvents: 'none' },
-
   list: { display: 'flex', flexDirection: 'column', gap: 6 },
-  empty: { textAlign: 'center', color: color.faint, padding: '28px 0', fontSize: 14 },
+  empty: { ...font.subhead, textAlign: 'center', padding: '28px 0' },
   row: {
     display: 'flex',
     alignItems: 'center',
     gap: 10,
-    padding: '10px 12px',
+    minHeight: 58,
+    padding: '6px 8px 6px 14px',
     borderRadius: radius.md,
-    border: `1px solid ${color.border}`,
     background: color.surfaceMuted,
+    boxShadow: 'inset 0 0 0 1.5px transparent',
+    transition: 'box-shadow 0.15s ease, background-color 0.15s ease',
   },
-  rowActive: { borderColor: color.primary, background: color.primarySoft },
+  rowActive: { background: color.primarySoft, boxShadow: `inset 0 0 0 1.5px ${color.primary}` },
   rowTap: {
     flex: 1,
     minWidth: 0,
+    minHeight: 44,
     textAlign: 'left',
     background: 'none',
     border: 'none',
     padding: 0,
-    display: 'block',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    color: color.text,
   },
   rowName: {
     display: 'block',
     fontSize: 14,
-    fontWeight: 600,
-    color: color.text,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  rowMeta: { display: 'block', fontSize: 12, color: color.muted, marginTop: 2 },
+  rowMeta: { display: 'block', fontSize: 11, color: color.muted, marginTop: 2 },
 
   basket: {
-    marginTop: 14,
-    padding: 12,
+    marginTop: 16,
+    padding: '12px 14px',
     borderRadius: radius.md,
-    border: `1px solid ${color.border}`,
     background: color.surfaceMuted,
   },
-  basketTitle: {
-    fontSize: 10,
-    fontWeight: 800,
-    color: color.faint,
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    marginBottom: 8,
-  },
-  basketEmpty: { fontSize: 13, color: color.faint },
-  basketRow: { display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' },
+  basketTitle: { ...font.overline, fontSize: 11, fontWeight: 600, marginBottom: 6 },
+  basketEmpty: { ...font.subhead },
+  basketRow: { display: 'flex', alignItems: 'center', gap: 8, minHeight: 36 },
   qtyBadge: {
     display: 'inline-flex',
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 22,
-    height: 22,
-    padding: '0 6px',
+    minWidth: 24,
+    height: 24,
+    padding: '0 7px',
     borderRadius: radius.pill,
-    background: color.violet,
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 800,
+    background: color.primarySoft,
+    color: color.primary,
+    fontSize: 11,
+    fontWeight: 700,
     flexShrink: 0,
   },
   basketName: {
@@ -307,21 +294,24 @@ const styles = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  basketPrice: { fontSize: 12, color: color.muted, flexShrink: 0 },
+  basketPrice: { fontSize: 13, color: color.muted, flexShrink: 0 },
   remove: {
+    width: 36,
+    height: 36,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     background: 'none',
     border: 'none',
-    color: color.danger,
-    fontSize: 12,
-    padding: 4,
+    color: color.muted,
     flexShrink: 0,
   },
   basketTotal: {
     display: 'flex',
     justifyContent: 'space-between',
-    borderTop: `1px solid ${color.border}`,
+    borderTop: `0.5px solid ${color.border}`,
     marginTop: 6,
-    paddingTop: 8,
+    paddingTop: 10,
     fontSize: 14,
   },
 }

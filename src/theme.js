@@ -1,50 +1,80 @@
 // Central design tokens so every screen feels like one cohesive product.
+//
+// Colours resolve to CSS custom properties defined in styles.css, so the whole
+// app follows the system light/dark appearance without any screen knowing about
+// it. The palette follows Apple's semantic system colours, with the ink shades
+// darkened where needed so small text clears 4.5:1 on its surface.
 export const color = {
-  bg: '#F1F5F9',
-  surface: '#FFFFFF',
-  surfaceMuted: '#F8FAFC',
-  border: '#E8EDF3',
-  text: '#0F172A',
-  muted: '#64748B',
-  faint: '#94A3B8',
-  primary: '#1F6FEB',
-  primaryDark: '#1D4ED8',
-  primarySoft: '#EFF4FF',
-  brandGradient: 'linear-gradient(135deg, #2563EB 0%, #4F46E5 100%)',
+  bg: 'var(--bg)', // grouped background
+  surface: 'var(--surface)', // cards, grouped cells
+  surfaceMuted: 'var(--fill)', // fills inside a card: fields, tracks, wells
+  border: 'var(--separator)',
+  text: 'var(--label)',
+  muted: 'var(--label-2)', // secondary label, ≥ 4.5:1 on surface
+  faint: 'var(--label-3)', // tertiary: placeholders, chevrons, decoration only
+  primary: 'var(--accent)',
+  primaryDark: 'var(--accent-ink)',
+  primarySoft: 'var(--accent-soft)',
+  onPrimary: '#FFFFFF',
 
   // Semantic accents. Each pairs a strong ink with a soft wash so a badge, a
   // tile and a chart bar for the same meaning always agree.
-  success: '#15803D',
-  successSoft: '#DCFCE7',
-  warning: '#B45309',
-  warningSoft: '#FEF3C7',
-  danger: '#DC2626',
-  dangerSoft: '#FEE2E2',
-  violet: '#7C3AED',
-  violetSoft: '#EDE9FE',
-  slate: '#475569',
-  slateSoft: '#E2E8F0',
+  success: 'var(--green)',
+  successSoft: 'var(--green-soft)',
+  warning: 'var(--orange)',
+  warningSoft: 'var(--orange-soft)',
+  danger: 'var(--red)',
+  dangerSoft: 'var(--red-soft)',
+  violet: 'var(--purple)',
+  violetSoft: 'var(--purple-soft)',
+  pink: 'var(--pink)',
+  pinkSoft: 'var(--pink-soft)',
+  teal: 'var(--teal)',
+  tealSoft: 'var(--teal-soft)',
+  indigo: 'var(--indigo)',
+  indigoSoft: 'var(--indigo-soft)',
+  slate: 'var(--label-2)',
+  slateSoft: 'var(--fill)',
 }
 
-export const radius = { sm: 8, md: 12, lg: 16, xl: 20, pill: 999 }
+export const radius = { sm: 8, md: 12, lg: 18, xl: 28, pill: 999 }
 
 export const shadow = {
-  sm: '0 1px 2px rgba(15,23,42,0.06)',
-  md: '0 4px 14px rgba(15,23,42,0.08)',
-  lg: '0 10px 30px rgba(15,23,42,0.14)',
+  sm: 'var(--shadow-sm)',
+  md: 'var(--shadow-md)',
+  lg: 'var(--shadow-lg)',
 }
 
+// Apple's iOS type ramp, one notch down (Dynamic Type "Small") — the default
+// "Large" reads oversized on a 360pt-wide Android screen.
 export const font = {
-  h1: { fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em', color: color.text },
-  h2: { fontSize: 17, fontWeight: 800, letterSpacing: '-0.01em', color: color.text },
-  body: { fontSize: 14, color: color.text },
-  small: { fontSize: 13, color: color.muted },
-  // The uppercase micro-label above every group of fields.
+  largeTitle: { fontSize: 25, lineHeight: '30px', fontWeight: 700, letterSpacing: '0.01em', color: color.text },
+  title1: { fontSize: 21, lineHeight: '26px', fontWeight: 700, letterSpacing: '0.01em', color: color.text },
+  title2: { fontSize: 17, lineHeight: '22px', fontWeight: 700, color: color.text },
+  title3: { fontSize: 16, lineHeight: '21px', fontWeight: 600, color: color.text },
+  headline: { fontSize: 14, lineHeight: '19px', fontWeight: 600, color: color.text },
+  body: { fontSize: 14, lineHeight: '19px', color: color.text },
+  callout: { fontSize: 13, lineHeight: '18px', color: color.text },
+  subhead: { fontSize: 13, lineHeight: '17px', color: color.muted },
+  footnote: { fontSize: 11, lineHeight: '15px', color: color.muted },
+  caption: { fontSize: 11, lineHeight: '14px', color: color.muted },
+
+  // Kept for older call sites: the section header above a grouped list.
+  h1: { fontSize: 21, fontWeight: 700, color: color.text },
+  h2: { fontSize: 14, fontWeight: 600, color: color.text },
+  small: { fontSize: 11, color: color.muted },
   overline: {
     fontSize: 11,
-    fontWeight: 800,
-    color: color.faint,
+    fontWeight: 500,
+    color: color.muted,
     textTransform: 'uppercase',
-    letterSpacing: '0.08em',
+    letterSpacing: '0.02em',
   },
+}
+
+// Status is shown three ways — ink, wash and a solid dot — always with a label.
+export const STATUS_TONE = {
+  pending: 'warning',
+  in_plan: 'violet',
+  confirmed: 'success',
 }

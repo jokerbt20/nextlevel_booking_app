@@ -16,16 +16,18 @@ import {
   toBookingItems,
 } from '../lib/catalogue'
 import { formatCurrency, toDateKey, toTimeKey } from '../utils/format'
-import { color, radius, shadow } from '../theme'
+import { color, font, radius, shadow } from '../theme'
+import Icon from './Icon'
 import {
   Badge,
   Button,
   Chip,
   ChipRow,
   Field,
+  IconTile,
   Input,
-  Overline,
   Section,
+  Segmented,
   Sheet,
   Stepper,
   TextArea,
@@ -43,9 +45,9 @@ function slotsForDate(dateStr) {
 }
 
 const STATUSES = [
-  { key: 'confirmed', label: 'Confirmed' },
-  { key: 'in_plan', label: 'In Plan' },
   { key: 'pending', label: 'Pending' },
+  { key: 'in_plan', label: 'In Plan' },
+  { key: 'confirmed', label: 'Confirmed' },
 ]
 
 /**
@@ -379,7 +381,7 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
           </div>
         </Section>
 
-        <Section title="Date & time">
+        <Section title="Date & Time">
           <Field label="Event date">
             <Input
               type="date"
@@ -416,7 +418,7 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
           )}
         </Section>
 
-        <Section title="Party size">
+        <Section title="Party Size">
           <div style={styles.row}>
             <Field label="Kids">
               <Input
@@ -477,7 +479,7 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
             product in the catalogue carries audience 'adults'. */}
 
         <Section
-          title="Items for the kids"
+          title="For the Kids"
           action={
             kidsSubtotal > 0 ? <Badge tone="primary">{formatCurrency(kidsSubtotal)}</Badge> : null
           }
@@ -486,7 +488,7 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
               even if the current package would not include pizzas. */}
           {allPizzaTypes.length > 0 && (tierIncludesPizza || isEdit) && (
             <button type="button" style={styles.pizzaButton} onClick={() => setShowPizza(true)}>
-              <span style={{ fontSize: 22 }}>🍕</span>
+              <IconTile name="pizza" tint="var(--orange)" size={36} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={styles.pizzaTitle}>Included pizzas</p>
                 <p style={styles.pizzaSub}>
@@ -496,8 +498,9 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
                 </p>
               </div>
               <Badge tone={pizzaComplete ? 'success' : 'warning'}>
-                {pizzaComplete ? '✓' : `${pizzaChosen}/${pizzaAllowance}`}
+                {pizzaComplete ? 'Done' : `${pizzaChosen}/${pizzaAllowance}`}
               </Badge>
+              <Icon name="chevronRight" size={16} strokeWidth={2.4} style={{ color: color.faint }} />
             </button>
           )}
 
@@ -523,7 +526,7 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
         </Section>
 
         <Section
-          title="Items for the adults"
+          title="For the Adults"
           action={
             adultsSubtotal > 0 ? <Badge tone="primary">{formatCurrency(adultsSubtotal)}</Badge> : null
           }
@@ -541,13 +544,7 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
         </Section>
 
         <Section title="Status">
-          <ChipRow>
-            {STATUSES.map((s) => (
-              <Chip key={s.key} active={form.status === s.key} onClick={() => update({ status: s.key })}>
-                {s.label}
-              </Chip>
-            ))}
-          </ChipRow>
+          <Segmented options={STATUSES} value={form.status} onChange={(status) => update({ status })} />
           <p style={styles.hint}>
             {form.status === 'confirmed'
               ? 'Locked in — the slot is held and the customer has been told.'
@@ -567,7 +564,7 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
 
         <div style={styles.estimate}>
           <div>
-            <Overline style={{ color: color.primaryDark }}>Estimated total</Overline>
+            <p style={styles.estimateLabel}>Estimated Total</p>
             <p style={styles.estimateNote}>The server re-prices on save.</p>
           </div>
           <span style={styles.estimateValue}>{formatCurrency(estimate)}</span>
@@ -576,12 +573,12 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
         {error && <p style={styles.error}>{error}</p>}
 
         <div style={styles.actions}>
-          <Button type="submit" variant={isEdit ? 'primary' : 'success'} full disabled={isSaving}>
-            {isSaving ? 'Saving…' : isEdit ? 'Save changes' : 'Create booking'}
+          <Button type="submit" variant="primary" full disabled={isSaving}>
+            {isSaving ? 'Saving…' : isEdit ? 'Save Changes' : 'Create Booking'}
           </Button>
           {onCancel && (
             <Button type="button" variant="ghost" full onClick={onCancel} disabled={isSaving}>
-              Discard
+              Discard Changes
             </Button>
           )}
         </div>
@@ -589,7 +586,7 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
 
       {showPizza && (
         <Sheet
-          title="Included pizzas 🍕"
+          title="Included Pizzas"
           subtitle={
             pizzaAllowance > 0
               ? `${pizzaAllowance} pizzas (${pizzaAllowance * KIDS_PER_PIZZA} slices) come free with this package. Pick the combination for the party.`
@@ -610,7 +607,7 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
             }}
           >
             {pizzaComplete
-              ? 'All pizzas chosen ✓'
+              ? 'All pizzas chosen'
               : `${pizzaChosen} of ${pizzaAllowance} chosen · ${pizzaAllowance - pizzaChosen} left`}
           </div>
 
@@ -658,7 +655,19 @@ function ItemRow({ item, qty, onChange }) {
   return (
     <div style={{ ...styles.itemRow, ...(selected ? styles.itemRowActive : {}) }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={styles.itemName}>{item.name}</p>
+        {/* Highlighted = in this booking's order. The check says so, so the
+            blue row never reads as an error or a recommendation. */}
+        <p style={{ ...styles.itemName, ...(selected ? { fontWeight: 600 } : {}) }}>
+          {selected && (
+            <Icon
+              name="check"
+              size={13}
+              strokeWidth={3}
+              style={{ display: 'inline', verticalAlign: '-1px', marginRight: 5, color: color.primary }}
+            />
+          )}
+          {item.name}
+        </p>
         <p style={styles.itemPrice}>
           {formatCurrency(item.price)}
           {item.description ? ` · ${item.description}` : ''}
@@ -672,20 +681,20 @@ function ItemRow({ item, qty, onChange }) {
 }
 
 const styles = {
-  container: { padding: 16, paddingBottom: 48, display: 'flex', flexDirection: 'column', gap: 14 },
+  container: { padding: '8px 16px 48px', display: 'flex', flexDirection: 'column', gap: 22 },
   row: { display: 'flex', gap: 12 },
-  hint: { fontSize: 12, color: color.faint, lineHeight: 1.5 },
-  warn: { fontSize: 12, color: color.warning, marginTop: 8, fontWeight: 600 },
+  hint: { ...font.footnote, lineHeight: 1.4 },
+  warn: { fontSize: 11, color: color.warning, marginTop: 8, fontWeight: 500 },
   error: {
     color: color.danger,
     background: color.dangerSoft,
     borderRadius: radius.md,
     padding: '12px 14px',
-    fontSize: 14,
-    fontWeight: 600,
+    fontSize: 13,
+    fontWeight: 500,
   },
 
-  tierPrice: { fontSize: 13, color: color.muted },
+  tierPrice: { ...font.subhead },
 
   pizzaButton: {
     display: 'flex',
@@ -694,18 +703,18 @@ const styles = {
     width: '100%',
     textAlign: 'left',
     background: color.surfaceMuted,
-    border: `1px solid ${color.border}`,
+    border: 'none',
     borderRadius: radius.md,
-    padding: '12px 14px',
+    padding: '12px 12px 12px 12px',
+    color: color.text,
   },
-  pizzaTitle: { fontSize: 15, fontWeight: 700, color: color.text },
-  pizzaSub: { fontSize: 12, color: color.muted, marginTop: 2 },
-  chevron: { fontSize: 22, color: color.faint, lineHeight: 1 },
+  pizzaTitle: { ...font.headline },
+  pizzaSub: { ...font.footnote, marginTop: 2 },
   pizzaStatus: {
-    padding: '9px 12px',
-    borderRadius: radius.sm,
+    padding: '10px 12px',
+    borderRadius: radius.md,
     fontSize: 13,
-    fontWeight: 800,
+    fontWeight: 600,
     textAlign: 'center',
     marginBottom: 6,
   },
@@ -714,50 +723,51 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
-    padding: '11px 2px',
-    borderBottom: `1px solid ${color.border}`,
+    minHeight: 56,
+    padding: '8px 2px',
+    borderBottom: `0.5px solid ${color.border}`,
   },
-  pizzaName: { fontSize: 15, fontWeight: 600, color: color.text },
+  pizzaName: { fontSize: 14, color: color.text },
 
   itemRow: {
     display: 'flex',
     alignItems: 'center',
     gap: 12,
-    padding: '10px 0',
-    borderBottom: `1px solid ${color.border}`,
+    minHeight: 60,
+    padding: '8px 0',
+    borderBottom: `0.5px solid ${color.border}`,
+    transition: 'background-color 0.2s ease',
   },
   group: { marginTop: 4 },
   groupTitle: {
-    fontSize: 10,
-    fontWeight: 800,
-    color: color.faint,
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
+    ...font.overline,
+    fontSize: 11,
+    fontWeight: 600,
     marginBottom: 2,
   },
   itemRowActive: {
     background: color.primarySoft,
-    borderRadius: radius.sm,
-    paddingLeft: 10,
-    paddingRight: 10,
+    borderRadius: radius.md,
+    paddingLeft: 12,
+    paddingRight: 8,
     borderBottomColor: 'transparent',
   },
-  itemName: { fontSize: 14, fontWeight: 600, color: color.text },
-  itemPrice: { fontSize: 12, color: color.muted, marginTop: 2 },
+  itemName: { fontSize: 14, color: color.text },
+  itemPrice: { fontSize: 11, color: color.muted, marginTop: 2 },
 
   estimate: {
-    background: color.primarySoft,
-    border: `1px solid #DBE6FF`,
+    background: color.surface,
     borderRadius: radius.lg,
-    padding: 18,
+    padding: '16px 18px',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
     gap: 12,
     boxShadow: shadow.sm,
   },
-  estimateNote: { fontSize: 11, color: color.primaryDark, opacity: 0.7, marginTop: 4 },
-  estimateValue: { color: color.primaryDark, fontWeight: 800, fontSize: 22, letterSpacing: '-0.02em' },
+  estimateLabel: { ...font.headline },
+  estimateNote: { ...font.footnote, marginTop: 2 },
+  estimateValue: { color: color.text, fontWeight: 700, fontSize: 19, letterSpacing: '-0.01em' },
 
-  actions: { display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 },
+  actions: { display: 'flex', flexDirection: 'column', gap: 6, marginTop: -6 },
 }

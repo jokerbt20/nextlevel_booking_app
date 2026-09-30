@@ -1,32 +1,35 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { getBusinessReport, getProductProfitReport, getStockReport } from '../api/reports'
-import {
-  formatCompactCurrency,
-  formatCurrency,
-  formatDate,
-  formatPercent,
-  formatQuantity,
-  toDateKey,
-} from '../utils/format'
+import { formatCurrency, formatDate, formatPercent, formatQuantity } from '../utils/format'
 import Header from '../components/Header'
+import Icon from '../components/Icon'
 import MonthlyBars from '../components/MonthlyBars'
+import { Badge, EmptyState, ErrorState, SearchField, SkeletonList } from '../components/ui'
 import {
-  Badge,
-  EmptyState,
-  ErrorState,
-  Overline,
-  Row,
-  Section,
-  Segmented,
-  SkeletonList,
-} from '../components/ui'
-import { color, radius, shadow } from '../theme'
+  Bar,
+  CountNumber,
+  GRADIENTS,
+  Hero,
+  KpiTile,
+  Legend,
+  Money,
+  Panel,
+  PeriodChips,
+  Ring,
+  heroSubStyle,
+  heroValueStyle,
+  periodCaption,
+  periodRange,
+} from '../components/reportKit'
+import { color, radius } from '../theme'
 
+// Each tab owns a colour, used for its tab tile and its headline card, so the
+// four reports are told apart before a word is read.
 const TABS = [
-  { key: 'money', label: 'Money' },
-  { key: 'parties', label: 'Parties' },
-  { key: 'stock', label: 'Stock' },
-  { key: 'products', label: 'Products' },
+  { key: 'money', label: 'Money', icon: 'wallet', tint: '#0f9d58' },
+  { key: 'parties', label: 'Parties', icon: 'balloon', tint: '#e0457b' },
+  { key: 'stock', label: 'Stock', icon: 'box', tint: '#f08c1a' },
+  { key: 'products', label: 'Products', icon: 'tag', tint: '#6a4cdb' },
 ]
 
 /**
@@ -36,22 +39,61 @@ const TABS = [
  */
 export default function ReportsScreen() {
   const [tab, setTab] = useState('money')
+  // One period for every tab that has one, so switching tabs never silently
+  // changes the window being looked at. Stock is a snapshot and ignores it.
+  const [period, setPeriod] = useState('year')
 
   return (
     <div>
       <Header title="Reports" />
       <div style={styles.container}>
-        <Segmented options={TABS} value={tab} onChange={setTab} />
-        {tab === 'money' && <MoneyTab />}
-        {tab === 'parties' && <PartiesTab />}
-        {tab === 'stock' && <StockTab />}
-        {tab === 'products' && <ProductsTab />}
+        <div style={styles.tabs} role="tablist">
+          {TABS.map((t) => {
+            const active = t.key === tab
+            return (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className="pressable"
+                onClick={() => setTab(t.key)}
+                style={{
+                  ...styles.tab,
+                  ...(active ? { background: t.tint, color: '#fff', boxShadow: `0 6px 16px ${t.tint}55` } : {}),
+                }}
+              >
+                <span
+                  style={{
+                    ...styles.tabIcon,
+                    background: active ? 'rgba(255,255,255,0.22)' : `${t.tint}1f`,
+                    color: active ? '#fff' : t.tint,
+                  }}
+                >
+                  <Icon name={t.icon} size={17} strokeWidth={2.2} />
+                </span>
+                {t.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {tab !== 'stock' && <PeriodChips value={period} onChange={setPeriod} />}
+
+        {/* Keyed on the tab only: switching tabs plays the entrance once; changing the
+            period just updates the numbers in place. */}
+        <div key={tab} style={styles.stack}>
+          {tab === 'money' && <MoneyTab period={period} />}
+          {tab === 'parties' && <PartiesTab period={period} />}
+          {tab === 'stock' && <StockTab />}
+          {tab === 'products' && <ProductsTab period={period} />}
+        </div>
       </div>
     </div>
   )
 }
 
-/** Shared fetch-once-per-tab plumbing, so every tab loads and fails the same way. */
+/** Shared fetch plumbing, so every tab loads and fails the same way. */
 function useReport(fetcher, deps = []) {
   const [state, setState] = useState({ data: null, error: null, isLoading: true })
 
@@ -66,122 +108,188 @@ function useReport(fetcher, deps = []) {
   return { ...state, reload: load }
 }
 
+// The business report is shared by Money and Parties; `to` runs to the end of
+// the day so a party on the last evening of the period is inside it.
+const businessFor = (period) => {
+  const [from, to] = periodRange(period)
+  return getBusinessReport(from, `${to}T23:59:59`)
+}
+
 /* ── Money ─────────────────────────────────────────────────────────────────── */
 
-function MoneyTab() {
-  const { data, error, isLoading, reload } = useReport(() => getBusinessReport())
+function MoneyTab({ period }) {
+  const { data, error, isLoading, reload } = useReport(() => businessFor(period), [period])
 
   if (isLoading) return <SkeletonList count={4} />
   if (error) return <ErrorState message={error} onRetry={reload} />
   if (!data) return null
 
-  const profitTone = data.profit >= 0 ? color.success : color.danger
+  const loss = data.profit < 0
+  const months = data.months ?? []
+
+  // Up to five categorical slots in fixed order; anything beyond folds into Other.
+  const slices = [...(data.costBreakdown ?? [])].sort((a, b) => b.amount - a.amount)
+  const shown = slices.slice(0, 5)
+  const rest = slices.slice(5)
+  if (rest.length) {
+    shown.push({
+      label: 'Other',
+      amount: rest.reduce((s, x) => s + x.amount, 0),
+      percent: rest.reduce((s, x) => s + x.percent, 0),
+      other: true,
+    })
+  }
 
   return (
     <>
-      <div style={styles.hero}>
-        <Overline style={{ color: 'rgba(255,255,255,0.75)' }}>Profit · completed parties</Overline>
-        <p style={styles.heroValue}>{formatCurrency(data.profit)}</p>
-        <p style={styles.heroSub}>
-          {formatCurrency(data.revenue)} in · {formatCurrency(data.totalCost)} out ·{' '}
-          {formatPercent(data.marginPercent)} margin
+      <Hero
+        gradient={loss ? GRADIENTS.loss : GRADIENTS.money}
+        label={loss ? 'Loss · completed parties' : 'Profit · completed parties'}
+        caption={periodCaption(period)}
+        aside={<Ring pct={data.marginPercent} onDark />}
+      >
+        <Money value={data.profit} style={heroValueStyle} />
+        <p style={heroSubStyle}>
+          <Icon name="trendUp" size={13} strokeWidth={2.4} style={{ display: 'inline', verticalAlign: '-2px' }} />{' '}
+          {formatCurrency(data.revenue)} in
+          <br />
+          <Icon name="trendDown" size={13} strokeWidth={2.4} style={{ display: 'inline', verticalAlign: '-2px' }} />{' '}
+          {formatCurrency(data.totalCost)} out
         </p>
-        <p style={styles.heroRange}>
-          {formatDate(data.from)} — {formatDate(data.to)}
-        </p>
+      </Hero>
+
+      <div style={styles.grid2}>
+        <KpiTile icon="balloon" tint={color.pink} soft={color.pinkSoft} label="Parties" delay={60}>
+          <CountNumber value={data.events} />
+        </KpiTile>
+        <KpiTile icon="trendUp" tint={color.success} soft={color.successSoft} label="Avg profit / party" delay={120}>
+          <Money value={data.avgProfitPerEvent} />
+        </KpiTile>
+        <KpiTile icon="people" tint={color.primary} soft={color.primarySoft} label="Avg profit / kid" delay={180}>
+          <Money value={data.avgProfitPerKid} />
+        </KpiTile>
+        <KpiTile icon="sparkles" tint={color.warning} soft={color.warningSoft} label="Avg kids / party" delay={240}>
+          <CountNumber value={data.avgKidsPerEvent} decimals={1} />
+        </KpiTile>
       </div>
 
-      <div style={styles.tileGrid}>
-        <Tile label="Parties" value={String(data.events)} />
-        <Tile label="Avg profit" value={formatCompactCurrency(data.avgProfitPerEvent)} tone={profitTone} />
-        <Tile label="Avg per kid" value={formatCompactCurrency(data.avgProfitPerKid)} />
-        <Tile label="Avg kids" value={data.avgKidsPerEvent.toFixed(1)} />
-      </div>
+      {/* Fixed costs belong to no party, so they only show up here. */}
+      {data.fixedExpenses > 0 && (
+        <Panel icon="wallet" tint={color.indigo} title="Money kept" delay={280}>
+          <FigureRow label="Profit from parties" value={formatCurrency(data.profit)} />
+          <FigureRow label="Rent, wages & bills" value={`− ${formatCurrency(data.fixedExpenses)}`} />
+          <div style={styles.divider} />
+          <FigureRow
+            label="Net profit"
+            value={<Money value={data.netProfit} />}
+            strong
+            ink={data.netProfit >= 0 ? color.success : color.danger}
+          />
+        </Panel>
+      )}
 
       {/* A report that quietly lies is worse than no report. */}
       {data.dataQuality?.length > 0 && (
-        <Section title="Check these figures">
-          {data.dataQuality.map((issue, i) => (
-            <div key={i} style={styles.issue}>
-              <div style={styles.issueHead}>
-                <span style={styles.issueTitle}>{issue.title}</span>
-                <Badge
-                  tone={
-                    issue.severity === 'critical' ? 'danger' : issue.severity === 'warning' ? 'warning' : 'slate'
-                  }
-                >
-                  {issue.count}
-                </Badge>
+        <Panel icon="exclamation" tint={color.warning} title="Check these figures" delay={300}>
+          {data.dataQuality.map((issue, i) => {
+            const tone = issue.severity === 'critical' ? 'danger' : issue.severity === 'warning' ? 'warning' : 'slate'
+            return (
+              <div key={i} style={{ ...styles.issue, borderLeftColor: tone === 'danger' ? color.danger : color.warning }}>
+                <div style={styles.issueHead}>
+                  <span style={styles.issueTitle}>{issue.title}</span>
+                  <Badge tone={tone}>
+                    <Icon name="exclamation" size={11} strokeWidth={2.6} />
+                    {issue.count}
+                  </Badge>
+                </div>
+                <p style={styles.issueDetail}>{issue.detail}</p>
+                <p style={styles.issueAction}>{issue.action}</p>
               </div>
-              <p style={styles.issueDetail}>{issue.detail}</p>
-              <p style={styles.issueAction}>→ {issue.action}</p>
-            </div>
-          ))}
-        </Section>
+            )
+          })}
+        </Panel>
       )}
 
-      <Section title="Month by month">
-        <MonthlyBars months={data.months} />
-      </Section>
-
-      <Section title="Committed, not yet earned">
-        <Row label="Parties booked ahead" value={String(data.pipelineEvents)} />
-        <Row label="Pipeline revenue" value={formatCurrency(data.pipelineRevenue)} />
-        <Row label="Pipeline profit" value={formatCurrency(data.pipelineProfit)} bold />
-      </Section>
-
-      <Section title="Cash & stock position">
-        <Row label="Paid to suppliers" value={formatCurrency(data.purchaseSpend)} />
-        <Row label="Stock on hand" value={formatCurrency(data.stockValue)} />
-        <Row
-          label="Written off"
-          value={formatCurrency(data.writeOffValue)}
-          color={data.writeOffValue > 0 ? color.danger : undefined}
-        />
-      </Section>
-
-      {(data.bestEvent || data.worstEvent) && (
-        <Section title="Where the money is made">
-          {data.bestEvent && <EventLine label="Best" event={data.bestEvent} tone="success" />}
-          {data.worstEvent && <EventLine label="Worst" event={data.worstEvent} tone="danger" />}
-        </Section>
+      {months.length > 0 && (
+        <Panel icon="chart" tint={color.primary} title="Month by month" delay={340}>
+          <MonthlyBars months={months} />
+          <p style={styles.hint}>Tap a month to see what it cost.</p>
+        </Panel>
       )}
 
-      {data.costBreakdown?.length > 0 && (
-        <Section title="What the cost is made of">
-          {data.costBreakdown.map((slice, i) => (
-            <div key={i} style={styles.sliceRow}>
+      {shown.length > 0 && (
+        <Panel icon="trendDown" tint="var(--series-1)" title="What the cost is made of" delay={420}>
+          {shown.map((slice, i) => (
+            <div key={slice.label} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={styles.sliceHead}>
-                <span style={styles.sliceLabel}>{slice.label}</span>
-                <span style={styles.sliceAmount}>{formatCurrency(slice.amount)}</span>
+                <span style={styles.sliceLabel}>
+                  <span style={{ ...styles.dot, background: slice.other ? 'var(--label-3)' : `var(--series-${i + 1})` }} />
+                  {slice.label}
+                </span>
+                <span style={styles.sliceAmount}>
+                  {formatCurrency(slice.amount)}
+                  <span style={styles.slicePct}> · {formatPercent(slice.percent)}</span>
+                </span>
               </div>
-              <div style={styles.sliceTrack}>
-                <span style={{ ...styles.sliceFill, width: `${Math.min(100, slice.percent)}%` }} />
-              </div>
-              <span style={styles.slicePercent}>{formatPercent(slice.percent)}</span>
+              <Bar pct={slice.percent} fill={slice.other ? 'var(--label-3)' : `var(--series-${i + 1})`} delay={i * 90} />
             </div>
           ))}
-        </Section>
+        </Panel>
       )}
+
+      <div style={styles.grid2}>
+        <MiniPanel
+          icon="clock"
+          tint={color.teal}
+          soft={color.tealSoft}
+          title="Booked ahead"
+          lines={[
+            [`${data.pipelineEvents} parties`, null],
+            [formatCurrency(data.pipelineRevenue), 'revenue'],
+            [formatCurrency(data.pipelineProfit), 'profit'],
+          ]}
+          delay={150}
+        />
+        <MiniPanel
+          icon="box"
+          tint={color.indigo}
+          soft={color.indigoSoft}
+          title="Cash & stock"
+          lines={[
+            [formatCurrency(data.purchaseSpend), 'paid to suppliers'],
+            [formatCurrency(data.stockValue), 'stock on hand'],
+            [formatCurrency(data.writeOffValue), 'written off', data.writeOffValue > 0 ? color.danger : null],
+          ]}
+          delay={180}
+        />
+      </div>
+
     </>
   )
 }
 
-function EventLine({ label, event, tone }) {
+function FigureRow({ label, value, strong, ink }) {
   return (
-    <div style={styles.eventLine}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Badge tone={tone}>{label}</Badge>
-          <span style={styles.eventName}>{event.customer}</span>
-        </div>
-        <p style={styles.eventMeta}>
-          {formatDate(event.eventDate)} · {event.tierName ?? 'No package'} · {event.kids} kids
-        </p>
-      </div>
-      <span style={{ ...styles.eventProfit, color: event.profit >= 0 ? color.success : color.danger }}>
-        {formatCompactCurrency(event.profit)}
+    <div style={styles.figureRow}>
+      <span style={{ fontSize: 14, color: strong ? color.text : color.muted, fontWeight: strong ? 600 : 400 }}>{label}</span>
+      <span style={{ fontSize: strong ? 17 : 14, fontWeight: strong ? 800 : 600, color: ink ?? color.text }}>{value}</span>
+    </div>
+  )
+}
+
+function MiniPanel({ icon, tint, soft, title, lines, delay }) {
+  return (
+    <div className="anim-rise" style={{ ...styles.mini, animationDelay: `${delay}ms` }}>
+      <span style={{ ...styles.miniIcon, background: soft, color: tint }}>
+        <Icon name={icon} size={16} strokeWidth={2.2} />
       </span>
+      <p style={styles.miniTitle}>{title}</p>
+      {lines.map(([value, caption, ink], i) => (
+        <p key={i} style={{ marginTop: i === 0 ? 2 : 6 }}>
+          <span style={{ display: 'block', fontSize: i === 0 ? 16 : 14, fontWeight: 700, color: ink ?? color.text }}>{value}</span>
+          {caption && <span style={{ display: 'block', fontSize: 11, color: color.muted }}>{caption}</span>}
+        </p>
+      ))}
     </div>
   )
 }
@@ -192,199 +300,321 @@ const SORTS = [
   { key: 'date', label: 'Newest' },
   { key: 'profit', label: 'Most profit' },
   { key: 'margin', label: 'Best margin' },
+  { key: 'low', label: 'Lowest margin' },
 ]
 
-function PartiesTab() {
-  const { data, error, isLoading, reload } = useReport(() => getBusinessReport())
+function PartiesTab({ period }) {
+  const { data, error, isLoading, reload } = useReport(() => businessFor(period), [period])
   const [sort, setSort] = useState('date')
+  const [query, setQuery] = useState('')
+
+  const birthdays = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return [...(data?.birthdays ?? [])]
+      .filter((b) => !q || `${b.customer} ${b.tierName ?? ''}`.toLowerCase().includes(q))
+      .sort((a, b) => {
+        if (sort === 'profit') return b.profit - a.profit
+        if (sort === 'margin') return b.marginPercent - a.marginPercent
+        if (sort === 'low') return a.marginPercent - b.marginPercent
+        return new Date(b.eventDate ?? 0) - new Date(a.eventDate ?? 0)
+      })
+  }, [data, sort, query])
 
   if (isLoading) return <SkeletonList count={4} />
   if (error) return <ErrorState message={error} onRetry={reload} />
 
-  const birthdays = [...(data?.birthdays ?? [])].sort((a, b) => {
-    if (sort === 'profit') return b.profit - a.profit
-    if (sort === 'margin') return b.marginPercent - a.marginPercent
-    return new Date(b.eventDate ?? 0) - new Date(a.eventDate ?? 0)
-  })
-
-  if (birthdays.length === 0) {
+  const all = data?.birthdays ?? []
+  if (all.length === 0) {
     return (
       <EmptyState
-        icon="🎂"
-        title="No parties in this range"
-        detail="Profit per party appears here once a booking's date has passed."
+        icon="balloon"
+        title="No Parties in This Period"
+        detail="Profit per party appears here once a booking’s date has passed. Try a longer period."
       />
     )
   }
 
+  const totalProfit = all.reduce((s, b) => s + b.profit, 0)
+  const avgMargin = all.reduce((s, b) => s + b.marginPercent, 0) / all.length
+  const unrecorded = all.filter((b) => !b.hasProductsRecorded).length
+
   return (
     <>
-      <Segmented options={SORTS} value={sort} onChange={setSort} />
-      {birthdays.map((b) => (
-        <div key={b.bookingId} style={styles.partyCard}>
-          <div style={styles.partyTop}>
-            <div style={{ minWidth: 0 }}>
-              <p style={styles.partyName}>{b.customer}</p>
-              <p style={styles.partyMeta}>
-                {formatDate(b.eventDate)} · {b.tierName ?? 'No package'} · {b.kids} kids
-              </p>
-            </div>
-            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <p style={{ ...styles.partyProfit, color: b.profit >= 0 ? color.success : color.danger }}>
-                {formatCompactCurrency(b.profit)}
-              </p>
-              <p style={styles.partyMargin}>{formatPercent(b.marginPercent)}</p>
-            </div>
-          </div>
+      <Hero
+        gradient={GRADIENTS.parties}
+        label={`${all.length} ${all.length === 1 ? 'party' : 'parties'} · total profit`}
+        caption={periodCaption(period)}
+        aside={<Ring pct={avgMargin} onDark label="avg margin" />}
+      >
+        <Money value={totalProfit} style={heroValueStyle} />
+        {unrecorded > 0 && (
+          <p style={heroSubStyle}>
+            <Icon name="exclamation" size={13} strokeWidth={2.4} style={{ display: 'inline', verticalAlign: '-2px' }} />{' '}
+            {unrecorded} without food recorded — profit overstated
+          </p>
+        )}
+      </Hero>
 
-          <div style={styles.partyStats}>
-            <Stat label="Revenue" value={formatCompactCurrency(b.revenue)} />
-            <Stat label="Cost" value={formatCompactCurrency(b.totalCost)} />
-            <Stat label="Per kid" value={formatCompactCurrency(b.profitPerKid)} />
-          </div>
+      <SearchField value={query} onChange={setQuery} placeholder="Search customer or package" />
+      <SortChips options={SORTS} value={sort} onChange={setSort} />
 
-          {/* Without recorded food and drink the profit above is overstated —
-              say so on the row rather than letting it read as fact. */}
-          {!b.hasProductsRecorded && (
-            <p style={styles.partyWarn}>⚠ No food or drink recorded — this profit is overstated.</p>
-          )}
-        </div>
-      ))}
+      {birthdays.length === 0 && (
+        <EmptyState icon="search" title="No Results" detail={`No party matches “${query.trim()}”.`} />
+      )}
+
+      {birthdays.map((b, i) => {
+        const up = b.profit >= 0
+        return (
+          <div
+            key={b.bookingId}
+            className="anim-rise"
+            style={{
+              ...styles.partyCard,
+              boxShadow: `inset 4px 0 0 ${up ? color.success : color.danger}, var(--shadow-sm)`,
+              animationDelay: `${Math.min(i, 10) * 45}ms`,
+            }}
+          >
+            <div style={styles.partyTop}>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <p style={styles.partyName}>{b.customer}</p>
+                <p style={styles.partyMeta}>
+                  {formatDate(b.eventDate)} · {b.tierName ?? 'No package'} · {b.kids} kids
+                </p>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <p style={{ ...styles.partyProfit, color: up ? color.success : color.danger }}>
+                  {formatCurrency(b.profit)}
+                </p>
+                <Badge tone={up ? 'success' : 'danger'} style={{ marginTop: 3 }}>
+                  <Icon name={up ? 'trendUp' : 'trendDown'} size={11} strokeWidth={2.6} />
+                  {formatPercent(b.marginPercent)}
+                </Badge>
+              </div>
+            </div>
+
+            <Bar pct={Math.abs(b.marginPercent)} fill={up ? color.success : color.danger} height={6} delay={120 + i * 45} />
+
+            <div style={styles.partyStats}>
+              <Stat label="Revenue" value={formatCurrency(b.revenue)} dot="var(--series-3)" />
+              <Stat label="Cost" value={formatCurrency(b.totalCost)} dot="var(--series-1)" />
+              <Stat label="Per kid" value={formatCurrency(b.profitPerKid)} dot="var(--series-2)" />
+            </div>
+
+            {/* Without recorded food and drink the profit above is overstated —
+                say so on the row rather than letting it read as fact. */}
+            {!b.hasProductsRecorded && (
+              <p style={styles.partyWarn}>
+                <Icon name="exclamation" size={13} strokeWidth={2.4} style={{ display: 'inline', verticalAlign: '-2px' }} />{' '}
+                No food or drink recorded — this profit is overstated.
+              </p>
+            )}
+          </div>
+        )
+      })}
     </>
+  )
+}
+
+function Stat({ label, value, dot }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <p style={styles.statLabel}>
+        <span style={{ ...styles.dot, width: 7, height: 7, background: dot }} />
+        {label}
+      </p>
+      <p style={styles.statValue}>{value}</p>
+    </div>
+  )
+}
+
+function SortChips({ options, value, onChange }) {
+  return (
+    <div className="no-scrollbar" style={styles.sortRow} role="radiogroup" aria-label="Sort">
+      {options.map((o) => {
+        const active = o.key === value
+        return (
+          <button
+            key={o.key}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            onClick={() => onChange(o.key)}
+            style={{ ...styles.sortChip, ...(active ? styles.sortChipActive : {}) }}
+          >
+            {o.label}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
 /* ── Stock ─────────────────────────────────────────────────────────────────── */
 
+const rankOf = (p) => (p.quantityOnHand <= 0 ? 'out' : p.isLowStock ? 'low' : 'ok')
+
 function StockTab() {
   const { data, error, isLoading, reload } = useReport(() => getStockReport())
+  const [show, setShow] = useState('all')
+  const [query, setQuery] = useState('')
 
   if (isLoading) return <SkeletonList count={4} />
   if (error) return <ErrorState message={error} onRetry={reload} />
   if (!data) return null
 
+  const products = data.products ?? []
+  // Counted from the same list the tiles filter, so a tile's number always
+  // matches the rows it shows.
+  const outCount = products.filter((p) => rankOf(p) === 'out').length
+  const lowCount = products.filter((p) => rankOf(p) === 'low').length
+  const okCount = products.filter((p) => rankOf(p) === 'ok').length
+  const maxValue = Math.max(...products.map((p) => p.stockValue ?? 0), 1)
+  const q = query.trim().toLowerCase()
+
   // Trouble first: out of stock, then low, then everything else.
-  const products = [...(data.products ?? [])].sort((a, b) => {
-    const rank = (p) => (p.quantityOnHand <= 0 ? 0 : p.isLowStock ? 1 : 2)
-    return rank(a) - rank(b) || b.stockValue - a.stockValue
-  })
+  const order = { out: 0, low: 1, ok: 2 }
+  const list = products
+    .filter((p) => show === 'all' || rankOf(p) === show)
+    .filter((p) => !q || `${p.name} ${p.categoryName ?? ''}`.toLowerCase().includes(q))
+    .sort((a, b) => order[rankOf(a)] - order[rankOf(b)] || b.stockValue - a.stockValue)
+
+  const toggle = (key) => setShow((s) => (s === key ? 'all' : key))
 
   return (
     <>
-      <div style={styles.hero}>
-        <Overline style={{ color: 'rgba(255,255,255,0.75)' }}>Stock on hand</Overline>
-        <p style={styles.heroValue}>{formatCurrency(data.totalStockValue)}</p>
-        <p style={styles.heroSub}>{products.length} products tracked</p>
+      <Hero gradient={GRADIENTS.stock} label="Stock on hand" caption={`${products.length} products tracked · right now`}>
+        <Money value={data.totalStockValue} style={heroValueStyle} />
+      </Hero>
+
+      {/* The three counts double as filters: tap one to see only those. */}
+      <div style={styles.grid3}>
+        <KpiTile icon="xmark" tint={color.danger} soft={color.dangerSoft} label="Out of stock"
+          active={show === 'out'} onClick={() => toggle('out')} delay={60}>
+          <CountNumber value={outCount} />
+        </KpiTile>
+        <KpiTile icon="exclamation" tint={color.warning} soft={color.warningSoft} label="Running low"
+          active={show === 'low'} onClick={() => toggle('low')} delay={110}>
+          <CountNumber value={lowCount} />
+        </KpiTile>
+        <KpiTile icon="check" tint={color.success} soft={color.successSoft} label="In stock"
+          active={show === 'ok'} onClick={() => toggle('ok')} delay={160}>
+          <CountNumber value={okCount} />
+        </KpiTile>
       </div>
 
-      <div style={styles.tileGrid}>
-        <Tile
-          label="Out of stock"
-          value={String(data.outOfStockCount)}
-          tone={data.outOfStockCount > 0 ? color.danger : undefined}
-        />
-        <Tile
-          label="Low stock"
-          value={String(data.lowStockCount)}
-          tone={data.lowStockCount > 0 ? color.warning : undefined}
-        />
-      </div>
+      <SearchField value={query} onChange={setQuery} placeholder="Search products" />
 
-      <Section title="Every product">
-        {products.map((p) => {
-          const out = p.quantityOnHand <= 0
+      <Panel
+        icon="box"
+        tint="var(--series-1)"
+        title={show === 'all' ? 'Every product' : show === 'out' ? 'Out of stock' : show === 'low' ? 'Running low' : 'In stock'}
+        right={show !== 'all' && (
+          <button type="button" onClick={() => setShow('all')} style={styles.clearFilter}>
+            Show all
+          </button>
+        )}
+        delay={200}
+      >
+        {list.length === 0 && <p style={styles.hint}>Nothing here.</p>}
+        {list.map((p, i) => {
+          const rank = rankOf(p)
           return (
             <div key={p.id} style={styles.stockRow}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={styles.stockName}>{p.name}</p>
-                <p style={styles.stockMeta}>
-                  {p.categoryName ?? 'Uncategorised'} · {formatCurrency(p.stockValue)}
-                </p>
+              <div style={styles.stockTop}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={styles.stockName}>{p.name}</p>
+                  <p style={styles.stockMeta}>
+                    {p.categoryName ?? 'Uncategorised'} · {formatCurrency(p.stockValue)}
+                  </p>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <p style={styles.stockQty}>{formatQuantity(p.quantityOnHand, p.baseUnit)}</p>
+                  {rank === 'out' ? (
+                    <Badge tone="danger"><Icon name="xmark" size={10} strokeWidth={3} />Out</Badge>
+                  ) : rank === 'low' ? (
+                    <Badge tone="warning"><Icon name="exclamation" size={10} strokeWidth={2.6} />Low</Badge>
+                  ) : (
+                    <Badge tone="success"><Icon name="check" size={10} strokeWidth={3} />OK</Badge>
+                  )}
+                </div>
               </div>
-              <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <p style={styles.stockQty}>{formatQuantity(p.quantityOnHand, p.baseUnit)}</p>
-                {out ? (
-                  <Badge tone="danger">Out</Badge>
-                ) : p.isLowStock ? (
-                  <Badge tone="warning">Low</Badge>
-                ) : (
-                  <span style={styles.stockOk}>ok</span>
-                )}
-              </div>
+              {/* Bar = share of the stock money tied up in this product. */}
+              <Bar pct={((p.stockValue ?? 0) / maxValue) * 100} fill="var(--series-1)" height={5} delay={Math.min(i, 12) * 40} />
             </div>
           )
         })}
-        {products.length === 0 && <p style={styles.muted}>No products are stock-tracked yet.</p>}
-      </Section>
+      </Panel>
     </>
   )
 }
 
 /* ── Products ──────────────────────────────────────────────────────────────── */
 
-const RANGES = [
-  { key: 'month', label: 'This month' },
-  { key: 'quarter', label: '90 days' },
-  { key: 'year', label: 'This year' },
+const PRODUCT_SORTS = [
+  { key: 'profit', label: 'Most profit' },
+  { key: 'revenue', label: 'Best sellers' },
+  { key: 'low', label: 'Lowest profit' },
 ]
 
-function rangeFor(key) {
-  const now = new Date()
-  // Local date keys, not toISOString() — that converts to UTC and can land the
-  // range a day out on either edge.
-  const iso = (d) => toDateKey(d.toISOString())
-  if (key === 'quarter') {
-    const from = new Date(now)
-    from.setDate(from.getDate() - 90)
-    return [iso(from), iso(now)]
-  }
-  if (key === 'year') return [iso(new Date(now.getFullYear(), 0, 1)), iso(now)]
-  return [iso(new Date(now.getFullYear(), now.getMonth(), 1)), iso(now)]
-}
+function ProductsTab({ period }) {
+  const [from, to] = periodRange(period)
+  const { data, error, isLoading, reload } = useReport(() => getProductProfitReport(from, to), [period])
+  const [sort, setSort] = useState('profit')
+  const [query, setQuery] = useState('')
 
-function ProductsTab() {
-  const [range, setRange] = useState('month')
-  const [from, to] = rangeFor(range)
-  const { data, error, isLoading, reload } = useReport(
-    () => getProductProfitReport(from, to),
-    [range],
-  )
+  if (isLoading) return <SkeletonList count={3} />
+  if (error) return <ErrorState message={error} onRetry={reload} />
+  if (!data) return null
 
-  const products = [...(data?.products ?? [])].sort((a, b) => b.profit - a.profit)
+  const q = query.trim().toLowerCase()
+  const products = [...(data.products ?? [])]
+    .filter((p) => !q || p.productName.toLowerCase().includes(q))
+    .sort((a, b) => (sort === 'revenue' ? b.revenue - a.revenue : sort === 'low' ? a.profit - b.profit : b.profit - a.profit))
+  const maxAbs = Math.max(...(data.products ?? []).map((p) => Math.abs(p.profit)), 1)
 
   return (
     <>
-      <Segmented options={RANGES} value={range} onChange={setRange} />
+      <Hero
+        gradient={GRADIENTS.products}
+        label="Gross margin on what sold"
+        caption={periodCaption(period)}
+        aside={<Ring pct={data.marginPercent} onDark />}
+      >
+        <Money value={data.profit} style={heroValueStyle} />
+        <p style={heroSubStyle}>
+          {formatCurrency(data.revenue)} sold · {formatCurrency(data.cogs)} cost
+        </p>
+      </Hero>
 
-      {isLoading && <SkeletonList count={3} />}
-      {error && !isLoading && <ErrorState message={error} onRetry={reload} />}
+      <div style={styles.grid2}>
+        <KpiTile icon="wallet" tint={color.indigo} soft={color.indigoSoft} label="Paid to suppliers" delay={60}>
+          <Money value={data.purchaseSpend} />
+        </KpiTile>
+        <KpiTile
+          icon="trash"
+          tint={data.writeOffValue > 0 ? color.danger : color.muted}
+          soft={data.writeOffValue > 0 ? color.dangerSoft : color.surfaceMuted}
+          label="Written off"
+          delay={110}
+        >
+          <Money value={data.writeOffValue} />
+        </KpiTile>
+      </div>
+      <p style={styles.hint}>
+        Restocking is cash out in this window but not a cost of what sold — stock outlives the month.
+      </p>
 
-      {!isLoading && !error && data && (
-        <>
-          <div style={styles.hero}>
-            <Overline style={{ color: 'rgba(255,255,255,0.75)' }}>Gross margin on what sold</Overline>
-            <p style={styles.heroValue}>{formatCurrency(data.profit)}</p>
-            <p style={styles.heroSub}>
-              {formatCurrency(data.revenue)} sold · {formatCurrency(data.cogs)} cost ·{' '}
-              {formatPercent(data.marginPercent)}
-            </p>
-          </div>
+      <SearchField value={query} onChange={setQuery} placeholder="Search products" />
+      <SortChips options={PRODUCT_SORTS} value={sort} onChange={setSort} />
 
-          <Section title="Cash movement">
-            <Row label="Paid to suppliers" value={formatCurrency(data.purchaseSpend)} />
-            <Row
-              label="Written off"
-              value={formatCurrency(data.writeOffValue)}
-              color={data.writeOffValue > 0 ? color.danger : undefined}
-            />
-            <p style={styles.muted}>
-              Restocking is cash out in this window but not a cost of what sold — stock outlives the month.
-            </p>
-          </Section>
-
-          <Section title="Product by product">
-            {products.map((p) => (
-              <div key={p.productId} style={styles.stockRow}>
+      <Panel icon="tag" tint={color.violet} title="Product by product" delay={160}>
+        {products.length === 0 && <p style={styles.hint}>Nothing was sold in this period.</p>}
+        {products.map((p, i) => {
+          const up = p.profit >= 0
+          return (
+            <div key={p.productId} style={styles.stockRow}>
+              <div style={styles.stockTop}>
+                <span style={styles.rank}>{i + 1}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={styles.stockName}>{p.productName}</p>
                   <p style={styles.stockMeta}>
@@ -392,115 +622,153 @@ function ProductsTab() {
                   </p>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <p style={{ ...styles.stockQty, color: p.profit >= 0 ? color.success : color.danger }}>
-                    {formatCompactCurrency(p.profit)}
+                  <p style={{ ...styles.stockQty, color: up ? color.success : color.danger }}>
+                    {formatCurrency(p.profit)}
                   </p>
                   <p style={styles.stockMeta}>{formatCurrency(p.cogs)} cost</p>
                 </div>
               </div>
-            ))}
-            {products.length === 0 && <p style={styles.muted}>Nothing was sold in this range.</p>}
-          </Section>
-        </>
-      )}
+              <Bar pct={(Math.abs(p.profit) / maxAbs) * 100} fill={up ? color.success : color.danger} height={5} delay={Math.min(i, 12) * 40} />
+            </div>
+          )
+        })}
+      </Panel>
     </>
   )
 }
 
-/* ── Bits ──────────────────────────────────────────────────────────────────── */
-
-function Tile({ label, value, tone }) {
-  return (
-    <div style={styles.tile}>
-      <p style={styles.tileLabel}>{label}</p>
-      <p style={{ ...styles.tileValue, ...(tone ? { color: tone } : {}) }}>{value}</p>
-    </div>
-  )
-}
-
-function Stat({ label, value }) {
-  return (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <p style={styles.statLabel}>{label}</p>
-      <p style={styles.statValue}>{value}</p>
-    </div>
-  )
-}
-
 const styles = {
-  container: { padding: 16, paddingBottom: 32, display: 'flex', flexDirection: 'column', gap: 14 },
+  container: { padding: '0 16px 32px', display: 'flex', flexDirection: 'column', gap: 14 },
+  stack: { display: 'flex', flexDirection: 'column', gap: 14 },
 
-  hero: { background: color.brandGradient, borderRadius: radius.lg, padding: 20, boxShadow: shadow.md },
-  heroValue: { fontSize: 30, fontWeight: 800, color: '#fff', marginTop: 8, letterSpacing: '-0.03em' },
-  heroSub: { fontSize: 13, color: 'rgba(255,255,255,0.88)', marginTop: 8, lineHeight: 1.5 },
-  heroRange: { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 10, fontWeight: 600 },
-
-  tileGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 },
-  tile: { background: color.surface, borderRadius: radius.lg, padding: 16, boxShadow: shadow.md },
-  tileLabel: { fontSize: 12, fontWeight: 700, color: color.muted },
-  tileValue: { fontSize: 22, fontWeight: 800, color: color.text, marginTop: 6, letterSpacing: '-0.02em' },
-
-  issue: { borderLeft: `3px solid ${color.border}`, paddingLeft: 12, marginBottom: 4 },
-  issueHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  issueTitle: { fontSize: 14, fontWeight: 700, color: color.text },
-  issueDetail: { fontSize: 13, color: color.muted, marginTop: 4, lineHeight: 1.5 },
-  issueAction: { fontSize: 13, color: color.primaryDark, marginTop: 6, fontWeight: 600 },
-
-  eventLine: { display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0' },
-  eventName: {
-    fontSize: 14,
-    fontWeight: 700,
-    color: color.text,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  eventMeta: { fontSize: 12, color: color.muted, marginTop: 4 },
-  eventProfit: { fontSize: 16, fontWeight: 800, flexShrink: 0 },
-
-  sliceRow: { marginBottom: 6 },
-  sliceHead: { display: 'flex', justifyContent: 'space-between', gap: 10 },
-  sliceLabel: { fontSize: 13, color: color.text, fontWeight: 600 },
-  sliceAmount: { fontSize: 13, color: color.text, fontWeight: 700 },
-  sliceTrack: { height: 8, background: color.surfaceMuted, borderRadius: 4, marginTop: 6, overflow: 'hidden' },
-  sliceFill: { display: 'block', height: '100%', background: '#2a78d6', borderRadius: 4 },
-  slicePercent: { fontSize: 11, color: color.faint, fontWeight: 600, marginTop: 4, display: 'block' },
-
-  partyCard: { background: color.surface, borderRadius: radius.lg, padding: 16, boxShadow: shadow.md },
-  partyTop: { display: 'flex', justifyContent: 'space-between', gap: 12 },
-  partyName: {
-    fontSize: 15,
-    fontWeight: 700,
-    color: color.text,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  },
-  partyMeta: { fontSize: 12, color: color.muted, marginTop: 4 },
-  partyProfit: { fontSize: 18, fontWeight: 800, letterSpacing: '-0.02em' },
-  partyMargin: { fontSize: 12, color: color.faint, fontWeight: 700, marginTop: 2 },
-  partyStats: {
+  tabs: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 },
+  tab: {
     display: 'flex',
-    gap: 10,
-    marginTop: 14,
-    paddingTop: 12,
-    borderTop: `1px solid ${color.border}`,
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 5,
+    padding: '10px 4px 9px',
+    borderRadius: 16,
+    border: 'none',
+    background: color.surface,
+    boxShadow: 'var(--shadow-sm)',
+    color: color.text,
+    fontSize: 12,
+    fontWeight: 600,
+    transition: 'background-color 0.25s ease, color 0.25s ease, box-shadow 0.25s ease',
   },
-  statLabel: { fontSize: 11, color: color.faint, fontWeight: 700, textTransform: 'uppercase' },
-  statValue: { fontSize: 14, color: color.text, fontWeight: 700, marginTop: 3 },
-  partyWarn: { fontSize: 12, color: color.warning, marginTop: 10, fontWeight: 600, lineHeight: 1.5 },
-
-  stockRow: {
+  tabIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 11,
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
-    padding: '10px 0',
-    borderBottom: `1px solid ${color.border}`,
+    justifyContent: 'center',
+    transition: 'background-color 0.25s ease',
   },
-  stockName: { fontSize: 14, fontWeight: 600, color: color.text },
-  stockMeta: { fontSize: 12, color: color.muted, marginTop: 3 },
-  stockQty: { fontSize: 14, fontWeight: 800, color: color.text, marginBottom: 4 },
-  stockOk: { fontSize: 11, color: color.faint, fontWeight: 700 },
 
-  muted: { fontSize: 12, color: color.faint, lineHeight: 1.6 },
+  grid2: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
+  grid3: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 },
+  divider: { height: 0.5, background: color.border },
+  hint: { fontSize: 12, color: color.muted, lineHeight: 1.45, padding: '0 4px' },
+
+  figureRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 },
+
+  issue: { borderLeft: '3px solid', paddingLeft: 12 },
+  issueHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
+  issueTitle: { fontSize: 14, fontWeight: 600, color: color.text },
+  issueDetail: { fontSize: 13, color: color.muted, marginTop: 3, lineHeight: 1.4 },
+  issueAction: { fontSize: 13, color: color.primary, marginTop: 5, fontWeight: 600 },
+
+
+  sliceHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 },
+  sliceLabel: { display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 13, color: color.text, fontWeight: 500 },
+  sliceAmount: { fontSize: 13, color: color.text, fontWeight: 700, flexShrink: 0 },
+  slicePct: { color: color.muted, fontWeight: 500 },
+  dot: { width: 9, height: 9, borderRadius: 3, display: 'inline-block', flexShrink: 0 },
+
+  mini: {
+    background: color.surface,
+    borderRadius: 18,
+    padding: 14,
+    boxShadow: 'var(--shadow-sm)',
+    minWidth: 0,
+  },
+  miniIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  miniTitle: { fontSize: 12, color: color.muted, fontWeight: 600, marginTop: 8 },
+
+  sortRow: { display: 'flex', gap: 8, overflowX: 'auto', margin: '0 -16px', padding: '0 16px' },
+  sortChip: {
+    minHeight: 32,
+    padding: '0 12px',
+    borderRadius: radius.pill,
+    border: 'none',
+    background: color.surfaceMuted,
+    color: color.text,
+    fontSize: 13,
+    fontWeight: 500,
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  },
+  sortChipActive: { background: color.text, color: color.surface, fontWeight: 600 },
+
+  partyCard: {
+    background: color.surface,
+    borderRadius: 18,
+    padding: '14px 14px 14px 18px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  partyTop: { display: 'flex', justifyContent: 'space-between', gap: 12 },
+  partyName: { fontSize: 15, fontWeight: 700, color: color.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  partyMeta: { fontSize: 12, color: color.muted, marginTop: 3 },
+  partyProfit: { fontSize: 16, fontWeight: 800 },
+  partyStats: { display: 'flex', gap: 10 },
+  statLabel: { display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: color.muted },
+  statValue: { fontSize: 13, color: color.text, fontWeight: 700, marginTop: 2 },
+  partyWarn: {
+    fontSize: 12,
+    color: color.warning,
+    fontWeight: 600,
+    lineHeight: 1.4,
+    background: color.warningSoft,
+    borderRadius: 10,
+    padding: '7px 10px',
+  },
+
+  clearFilter: {
+    border: 'none',
+    background: color.primarySoft,
+    color: color.primary,
+    fontSize: 12,
+    fontWeight: 600,
+    borderRadius: radius.pill,
+    padding: '5px 10px',
+  },
+  stockRow: { display: 'flex', flexDirection: 'column', gap: 7, paddingBottom: 10, borderBottom: `0.5px solid ${color.border}` },
+  stockTop: { display: 'flex', alignItems: 'center', gap: 10 },
+  stockName: { fontSize: 14, color: color.text, fontWeight: 500 },
+  stockMeta: { fontSize: 12, color: color.muted, marginTop: 2 },
+  stockQty: { fontSize: 14, fontWeight: 700, color: color.text, marginBottom: 3 },
+  rank: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    background: color.surfaceMuted,
+    color: color.muted,
+    fontSize: 11,
+    fontWeight: 700,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
 }
