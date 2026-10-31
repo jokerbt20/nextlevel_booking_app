@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { formatCurrency, formatPercent, formatQuantity } from '../utils/format'
-import { color, radius } from '../theme'
+import { formatCurrency, formatPercent } from '../utils/format'
+import { color } from '../theme'
+import Icon from './Icon'
+import MonthDetailSheet from './MonthDetailSheet'
 import { Badge } from './ui'
 
 /**
@@ -28,7 +30,9 @@ const SERIES = {
 const HATCH = `repeating-linear-gradient(135deg, rgba(255,255,255,0.55) 0 3px, transparent 3px 6px)`
 
 export default function MonthlyBars({ months }) {
-  const [openKey, setOpenKey] = useState(null)
+  // The month whose detail sheet is open. Every month opens, planned ones too:
+  // their bills are already known even when the parties have not happened.
+  const [open, setOpen] = useState(null)
 
   const rows = months ?? []
   if (rows.length === 0) return null
@@ -47,18 +51,16 @@ export default function MonthlyBars({ months }) {
       <div style={styles.rows}>
         {rows.map((m, idx) => {
           const key = `${m.year}-${m.month}`
-          const isOpen = openKey === key
           const isLoss = m.profit < 0
           const costPct = (Math.min(m.totalCost, max) / max) * 100
           const profitPct = isLoss ? 0 : (Math.max(0, m.profit) / max) * 100
-          const hasDrill = (m.productCosts ?? []).length > 0
 
           return (
             <div key={key}>
               <button
                 style={styles.row}
-                onClick={() => setOpenKey(isOpen ? null : key)}
-                disabled={!hasDrill}
+                onClick={() => setOpen(m)}
+                aria-label={`${m.label}: open the month`}
               >
                 <div style={styles.rowHead}>
                   <span style={styles.month}>
@@ -71,6 +73,7 @@ export default function MonthlyBars({ months }) {
                   </span>
                   <span style={{ ...styles.revenue, color: isLoss ? color.danger : color.text }}>
                     {formatCurrency(m.revenue)}
+                    <Icon name="chevronRight" size={13} strokeWidth={2.6} style={{ color: color.faint, marginLeft: 4, verticalAlign: '-2px' }} />
                   </span>
                 </div>
 
@@ -121,24 +124,12 @@ export default function MonthlyBars({ months }) {
                 </div>
               </button>
 
-              {isOpen && (
-                <div style={styles.drill}>
-                  <p style={styles.drillTitle}>What it cost — biggest first</p>
-                  {m.productCosts.map((p, i) => (
-                    <div key={i} style={styles.drillRow}>
-                      <span style={styles.drillName}>
-                        {p.productName}
-                        <span style={styles.drillQty}> · {formatQuantity(p.quantity, p.baseUnit)}</span>
-                      </span>
-                      <span style={styles.drillCost}>{formatCurrency(p.cost)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )
         })}
       </div>
+
+      {open && <MonthDetailSheet month={open} onClose={() => setOpen(null)} />}
     </div>
   )
 }
@@ -174,7 +165,7 @@ const styles = {
   },
   rowHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },
   month: { fontSize: 13, fontWeight: 600, color: color.text },
-  revenue: { fontSize: 13, fontWeight: 600 },
+  revenue: { fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' },
 
   track: {
     display: 'flex',
@@ -189,22 +180,4 @@ const styles = {
   rowFoot: { display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 6 },
   foot: { fontSize: 11, color: color.muted },
 
-  drill: {
-    background: color.surfaceMuted,
-    borderRadius: radius.md,
-    padding: '12px 14px',
-    marginTop: 10,
-  },
-  drillTitle: {
-    fontSize: 11,
-    fontWeight: 600,
-    color: color.muted,
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
-    marginBottom: 8,
-  },
-  drillRow: { display: 'flex', justifyContent: 'space-between', gap: 10, padding: '4px 0' },
-  drillName: { fontSize: 13, color: color.text, minWidth: 0 },
-  drillQty: { color: color.muted },
-  drillCost: { fontSize: 13, fontWeight: 600, color: color.text, flexShrink: 0 },
 }

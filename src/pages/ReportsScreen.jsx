@@ -213,7 +213,7 @@ function MoneyTab({ period }) {
       {months.length > 0 && (
         <Panel icon="chart" tint={color.primary} title="Month by month" delay={340}>
           <MonthlyBars months={months} />
-          <p style={styles.hint}>Tap a month to see what it cost.</p>
+          <p style={styles.hint}>Tap a month for its bills, food cost and net profit.</p>
         </Panel>
       )}
 

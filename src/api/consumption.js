@@ -5,8 +5,13 @@ import { apiRequest } from './client'
 // birthday with nothing recorded here reports an overstated profit, which is
 // why the business report flags those bookings.
 
-/** Every product that can be recorded against a booking, with stock on hand. */
-export const getAvailableProducts = () => apiRequest('/inventory/available-products')
+/**
+ * Every product that can be recorded against a booking, with stock on hand.
+ * Given the booking, prices are the ones from the day it was booked — what the
+ * server will actually charge — rather than today's list price.
+ */
+export const getAvailableProducts = (bookingId) =>
+  apiRequest('/inventory/available-products', { params: { bookingId } })
 
 export const getBookingConsumption = (bookingId) =>
   apiRequest(`/bookings/${bookingId}/consumption`)

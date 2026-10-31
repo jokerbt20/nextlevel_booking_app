@@ -185,7 +185,16 @@ export default function CalendarView({ bookings, onSelectBooking, onCreateForDat
                 </span>
                 <span style={styles.dotRow}>
                   {dayBookings.slice(0, 3).map((b, i) => (
-                    <span key={i} style={{ ...styles.dot, background: dotColor(b) }} />
+                    // A party not yet confirmed is a hollow red ring, as on the web
+                    // calendar, so a month of still-to-phone parties shows at a glance.
+                    <span
+                      key={i}
+                      style={
+                        b.status !== 'confirmed'
+                          ? { ...styles.dot, ...styles.dotUnconfirmed }
+                          : { ...styles.dot, background: dotColor(b) }
+                      }
+                    />
                   ))}
                 </span>
               </button>
@@ -369,6 +378,7 @@ const styles = {
   selectedToday: { background: color.danger, color: '#fff', fontWeight: 600 },
   dotRow: { display: 'flex', alignItems: 'center', gap: 3, height: 5 },
   dot: { width: 5, height: 5, borderRadius: 3 },
+  dotUnconfirmed: { width: 6, height: 6, background: 'transparent', boxShadow: `inset 0 0 0 1.5px ${color.danger}` },
 
   agendaHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: '0 4px 8px' },
   agendaDate: { fontSize: 16, lineHeight: '21px', fontWeight: 700, color: color.text },

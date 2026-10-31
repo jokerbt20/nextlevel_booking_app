@@ -85,6 +85,9 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
     slot: booking ? toTimeKey(booking.eventDate) : '',
     kidsCount: String(booking?.kidsCount ?? 15),
     adultsCount: String(booking?.adultsCount ?? 0),
+    // Typed by the owner. Blank = not set, which the server stores as null. It
+    // must always be sent on an edit: the server reads a missing value as "clear".
+    girlsNeeded: booking?.girlsNeeded != null ? String(booking.girlsNeeded) : '',
     tierId: booking?.tierId ?? null,
     status: booking?.status ?? 'confirmed',
     notes: initialNotes.freeText,
@@ -108,7 +111,13 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
           // Retired goods are excluded: they live in the product catalogue now,
           // so offering both would list every pizza twice.
           ...services.filter((s) => s.kind === 'service' && s.isActive).map(fromService),
-          ...products.map(fromAdminProduct),
+          ...products.map(fromAdminProduct).map((p) =>
+            // An edit is charged at the prices of the day the booking was made,
+            // so the form shows those rather than today's list price.
+            booking?.productPrices?.[p.productId] != null
+              ? { ...p, price: booking.productPrices[p.productId] }
+              : p,
+          ),
         ])
       })
       .finally(() => setIsCatalogueReady(true))
@@ -251,6 +260,8 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
     if (!form.customerName.trim()) e.customerName = 'Required'
     if (!form.customerLastName.trim()) e.customerLastName = 'Required'
     if (form.kidAge.trim() && !/^\d+$/.test(form.kidAge.trim())) e.kidAge = 'Numbers only'
+    if (form.girlsNeeded.trim() && !(/^\d+$/.test(form.girlsNeeded.trim()) && Number(form.girlsNeeded) <= 10))
+      e.girlsNeeded = '0–10'
     if (form.customerEmail.trim() && !/^\S+@\S+\.\S+$/.test(form.customerEmail.trim()))
       e.customerEmail = 'Not a valid email'
     if (form.eventDate && !form.slot) e.slot = 'Choose a time slot'
@@ -281,6 +292,7 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
       tierId: form.tierId,
       kidsCount: kids,
       adultsCount: Number(form.adultsCount) || 0,
+      girlsNeeded: form.girlsNeeded.trim() ? Number(form.girlsNeeded) : null,
       // Real lines with real quantities. The server re-prices every one against
       // the catalogue, so no amount here is trusted.
       items: [
@@ -432,6 +444,15 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
                 inputMode="numeric"
                 value={form.adultsCount}
                 onChange={(e) => update({ adultsCount: e.target.value })}
+              />
+            </Field>
+            <Field label="Girls needed" error={errs.girlsNeeded}>
+              <Input
+                inputMode="numeric"
+                value={form.girlsNeeded}
+                invalid={!!errs.girlsNeeded}
+                placeholder="Not set"
+                onChange={(e) => update({ girlsNeeded: e.target.value })}
               />
             </Field>
           </div>

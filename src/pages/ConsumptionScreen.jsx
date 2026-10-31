@@ -41,7 +41,7 @@ export default function ConsumptionScreen({ booking, onBack, onChanged }) {
     setError(null)
     try {
       const [available, recorded] = await Promise.all([
-        getAvailableProducts(),
+        getAvailableProducts(booking.id),
         getBookingConsumption(booking.id),
       ])
       setProducts(available)

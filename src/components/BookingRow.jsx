@@ -1,4 +1,4 @@
-import { formatCurrency, formatTime, STATUS_COLOR } from '../utils/format'
+import { formatCurrency, formatTime, girlsLabel, STATUS_COLOR } from '../utils/format'
 import { color, font } from '../theme'
 import Icon from './Icon'
 import { PackageBadge, StatusBadge } from './ui'
@@ -19,8 +19,11 @@ export default function BookingRow({ booking, onClick, showTime = true, accent }
   const upcoming = !booking.eventDate || new Date(booking.eventDate).getTime() >= Date.now()
   const ready = booking.isOrderComplete === true
   const statusColor = STATUS_COLOR[booking.status] ?? color.muted
+  const girls = girlsLabel(booking.suggestedCrew)
   const guests =
-    `${booking.kidsCount} kids` + (booking.adultsCount > 0 ? ` · ${booking.adultsCount} adults` : '')
+    `${booking.kidsCount} kids` +
+    (booking.adultsCount > 0 ? ` · ${booking.adultsCount} adults` : '') +
+    (girls ? ` · ${girls} needed` : '')
 
   return (
     <button type="button" className="cell-button" style={styles.row} onClick={onClick}>
@@ -29,7 +32,16 @@ export default function BookingRow({ booking, onClick, showTime = true, accent }
           {time ?? '—'}
         </span>
       )}
-      <span style={{ ...styles.bar, background: statusColor }} />
+      {/* Not confirmed yet: red stripes, the web calendar's mark for "call to confirm". */}
+      <span
+        style={{
+          ...styles.bar,
+          background:
+            booking.status === 'confirmed'
+              ? statusColor
+              : `repeating-linear-gradient(135deg, ${color.danger} 0 3px, ${color.dangerSoft} 3px 6px)`,
+        }}
+      />
       <span style={styles.body}>
         <span style={styles.nameLine}>
           {upcoming && (
@@ -54,6 +66,12 @@ export default function BookingRow({ booking, onClick, showTime = true, accent }
               <>
                 <Icon name="person" size={12} strokeWidth={2.2} style={{ color: color.teal, marginLeft: 6 }} />
                 {booking.adultsCount}
+              </>
+            )}
+            {girls && (
+              <>
+                <Icon name="sparkles" size={12} strokeWidth={2.2} style={{ color: color.pink, marginLeft: 6 }} />
+                {booking.suggestedCrew}
               </>
             )}
             <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>

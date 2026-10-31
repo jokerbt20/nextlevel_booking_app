@@ -92,6 +92,13 @@ export function AuthProvider({ children }) {
   // Anything that isn't an admin is treated as read-only. Defaulting the other
   // way would leak the money screens to an unrecognised role.
   const isAdmin = role?.toLowerCase() === 'admin'
+  // Role 3, added with the staff feature: their own work and days off, nothing else.
+  const isEmployee = role?.toLowerCase() === 'employee'
+  // A person on the team rather than a service account (the booth's own login).
+  // "Not false" on purpose, as on the web: a session stored before the field
+  // existed has it undefined. It only decides what is shown — the staff
+  // endpoints check for themselves.
+  const isStaff = session?.user?.isStaff !== false
 
   return (
     <Ctx.Provider
@@ -100,7 +107,11 @@ export function AuthProvider({ children }) {
         user: session?.user ?? null,
         role,
         isAdmin,
-        isOperator: !!role && !isAdmin,
+        isEmployee,
+        isOperator: !!role && !isAdmin && !isEmployee,
+        isStaff,
+        // Who gets a "My Work" screen: anybody on the team who is not the owner.
+        hasMyWork: isEmployee || (!isAdmin && !!role && isStaff),
         isRestoring,
         login,
         logout,

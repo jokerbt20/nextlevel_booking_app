@@ -9,7 +9,7 @@ import { Badge, ListRow, Row, Section } from '../components/ui'
 import { color, font, radius, shadow } from '../theme'
 
 export default function SettingsScreen() {
-  const { session, user: cached, isAdmin, logout } = useAuth()
+  const { session, user: cached, isAdmin, isEmployee, hasMyWork, logout } = useAuth()
   const [user, setUser] = useState(cached)
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export default function SettingsScreen() {
             <p style={styles.name}>{user?.username ?? '—'}</p>
             {user?.email && <p style={styles.email}>{user.email}</p>}
             <Badge tone={isAdmin ? 'primary' : 'slate'} style={{ marginTop: 8 }}>
-              {isAdmin ? 'Administrator' : 'Operator · View Only'}
+              {isAdmin ? 'Administrator' : isEmployee ? 'Staff' : hasMyWork ? 'Operator · Staff' : 'Operator · View Only'}
             </Badge>
           </div>
         </div>
@@ -52,8 +52,10 @@ export default function SettingsScreen() {
               : 'Operator accounts are read-only by design — the server refuses changes from them, not just this app. Ask an administrator if you need something changed.'
           }
         >
-          <Permission label="See all bookings" allowed />
-          <Permission label="Calendar" allowed />
+          {hasMyWork && <Permission label="My work: take parties, ask for days off" allowed />}
+          <Permission label="See all bookings" allowed={!isEmployee} />
+          <Permission label="Calendar" allowed={!isEmployee} />
+          <Permission label="Assign staff, answer days off" allowed={isAdmin} />
           <Permission label="Create and edit bookings" allowed={isAdmin} />
           <Permission label="Cost, profit and stock reports" allowed={isAdmin} />
         </Section>

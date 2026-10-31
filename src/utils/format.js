@@ -126,3 +126,9 @@ export function formatLongDate(iso) {
  */
 export const needsCall = (b) =>
   !b.isOrderComplete && (b.status === 'confirmed' || b.status === 'in_plan')
+
+/**
+ * "3 girls" — how many staff the owner says a party needs. 0 or missing means
+ * not set, which every screen shows as nothing at all, as the web does.
+ */
+export const girlsLabel = (n) => (n > 0 ? `${n} ${n === 1 ? 'girl' : 'girls'}` : null)

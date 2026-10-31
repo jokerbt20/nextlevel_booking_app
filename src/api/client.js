@@ -30,10 +30,13 @@ export function setTokensHandler(fn) {
 }
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, code = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    // The server's stable error code (ON_TIME_OFF, BOOKING_PAST…), so a screen
+    // can say it in its own words rather than echo the English message.
+    this.code = code
     // 403 means the account is fine but the role isn't allowed here. Callers
     // show "not available for your account" rather than an error.
     this.isForbidden = status === 403
@@ -91,12 +94,14 @@ export async function apiRequest(path, { method = 'GET', body, params, retry = t
 
   if (!res.ok) {
     let message = `Request failed (${res.status})`
+    let code = null
     if (res.status === 403) message = 'Your account does not have access to this.'
     try {
       const data = await res.json()
       message = data.message || message
+      code = data.code ?? null
     } catch { /* no JSON body */ }
-    throw new ApiError(message, res.status)
+    throw new ApiError(message, res.status, code)
   }
 
   if (res.status === 204) return null

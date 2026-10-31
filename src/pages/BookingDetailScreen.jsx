@@ -7,6 +7,7 @@ import {
   setOrderComplete,
   updateBookingStatus,
 } from '../api/bookings'
+import { getAssignments } from '../api/staff'
 import { useAuth } from '../contexts/AuthContext'
 import { useBackHandler } from '../lib/backStack'
 import { FOOD_GROUPS, foodGroupOf, splitNotes } from '../lib/catalogue'
@@ -15,6 +16,7 @@ import {
   formatCurrency,
   formatLongDate,
   formatTime,
+  girlsLabel,
   toDateKey,
   toTimeKey,
 } from '../utils/format'
@@ -24,6 +26,7 @@ import { DateTile } from '../components/BookingRow'
 import EditBookingScreen from './EditBookingScreen'
 import ConsumptionScreen from './ConsumptionScreen'
 import SupplierOrderSheet from '../components/SupplierOrderSheet'
+import CrewSheet from '../components/CrewSheet'
 import {
   Badge,
   CountBadge,
@@ -55,6 +58,18 @@ export default function BookingDetailScreen({ bookingId, onBack, onChanged }) {
   const [isEditingConsumption, setIsEditingConsumption] = useState(false)
   const [isOrderingFood, setIsOrderingFood] = useState(false)
   const [reschedule, setReschedule] = useState(null) // { date, slot } while the sheet is open
+  // The crew comes from its own endpoint. null = not loaded (or unavailable on
+  // this server), which simply leaves the section out.
+  const [crew, setCrew] = useState(null)
+  const [isPickingCrew, setIsPickingCrew] = useState(false)
+
+  async function loadCrew() {
+    try {
+      setCrew(await getAssignments(bookingId))
+    } catch {
+      setCrew(null)
+    }
+  }
 
   async function load() {
     setError(null)
@@ -69,6 +84,7 @@ export default function BookingDetailScreen({ bookingId, onBack, onChanged }) {
 
   useEffect(() => {
     load()
+    loadCrew()
   }, [bookingId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Back returns to the list. A child screen opened from here registers after
@@ -210,6 +226,9 @@ export default function BookingDetailScreen({ bookingId, onBack, onChanged }) {
               {booking.adultsCount > 0 && (
                 <CountBadge icon="person" value={`${booking.adultsCount} adults`} tone="teal" />
               )}
+              {girlsLabel(booking.girlsNeeded) && (
+                <CountBadge icon="sparkles" value={girlsLabel(booking.girlsNeeded)} tone="pink" />
+              )}
             </div>
           </div>
         </div>
@@ -252,7 +271,23 @@ export default function BookingDetailScreen({ bookingId, onBack, onChanged }) {
           {booking.adultsCount > 0 && (
             <Row icon="person" tint={color.teal} label="Adults" value={String(booking.adultsCount)} bold />
           )}
+          <Row
+            icon="sparkles"
+            tint={color.pink}
+            label="Girls needed"
+            value={booking.girlsNeeded > 0 ? String(booking.girlsNeeded) : 'Not set'}
+            bold={booking.girlsNeeded > 0}
+          />
         </Section>
+
+        {crew && (
+          <CrewSection
+            crew={crew}
+            needed={booking.girlsNeeded ?? 0}
+            canEdit={isAdmin}
+            onEdit={() => setIsPickingCrew(true)}
+          />
+        )}
 
         {/* The food order in the three groups the kitchen reads it by — pizzas,
             platters, everything else — each line with its count and whether the
@@ -357,6 +392,21 @@ export default function BookingDetailScreen({ bookingId, onBack, onChanged }) {
         )}
       </div>
 
+      {isPickingCrew && crew && (
+        <CrewSheet
+          bookingId={bookingId}
+          title={`Crew · ${customerName || 'Booking'}`}
+          assignments={crew}
+          needed={booking.girlsNeeded ?? 0}
+          onClose={() => setIsPickingCrew(false)}
+          onSaved={async () => {
+            setIsPickingCrew(false)
+            await loadCrew()
+            onChanged?.()
+          }}
+        />
+      )}
+
       {isOrderingFood && (
         <SupplierOrderSheet bookingId={bookingId} onClose={() => setIsOrderingFood(false)} />
       )}
@@ -441,6 +491,42 @@ function FoodOrder({ lines, pizzaNote }) {
           </div>
         )
       })}
+    </Section>
+  )
+}
+
+/** Who works the party, against how many girls the owner said it needs. */
+function CrewSection({ crew, needed, canEdit, onEdit }) {
+  const short = needed > 0 && crew.length < needed
+  return (
+    <Section
+      title="Crew"
+      action={
+        needed > 0 ? (
+          <Badge tone={short ? 'warning' : 'success'}>
+            {crew.length}/{needed} {short ? `· ${needed - crew.length} more needed` : '· enough'}
+          </Badge>
+        ) : null
+      }
+    >
+      {crew.length === 0 ? (
+        <p style={{ ...font.subhead }}>Nobody is on this party yet.</p>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {crew.map((a) => (
+            <span key={a.id} style={{ ...styles.crewChip, ...(a.isOnTimeOff ? styles.crewChipOff : {}) }}>
+              <span style={{ ...styles.crewDot, background: a.staffColorHex || color.violet }} />
+              {a.staffName}
+              {a.isOnTimeOff && <span style={{ color: color.danger, fontWeight: 600 }}> · day off</span>}
+            </span>
+          ))}
+        </div>
+      )}
+      {canEdit && (
+        <Button variant="tinted" size="small" onClick={onEdit} style={{ alignSelf: 'flex-start' }}>
+          <Icon name="people" size={15} strokeWidth={2.4} /> {crew.length ? 'Change Crew' : 'Assign Crew'}
+        </Button>
+      )}
     </Section>
   )
 }
@@ -576,6 +662,20 @@ const styles = {
   foodPrice: { fontSize: 13, fontWeight: 600, color: color.text, flexShrink: 0 },
   foodNote: { fontSize: 13, color: color.muted, paddingLeft: 36 },
   notesCard: { background: color.warningSoft, boxShadow: `inset 3px 0 0 ${color.warning}` },
+
+  crewChip: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '5px 11px',
+    borderRadius: 999,
+    background: color.surfaceMuted,
+    fontSize: 13,
+    fontWeight: 500,
+    color: color.text,
+  },
+  crewChipOff: { background: color.dangerSoft },
+  crewDot: { width: 8, height: 8, borderRadius: 4, flexShrink: 0 },
 
   readOnly: { ...font.footnote, textAlign: 'center', lineHeight: 1.5, padding: '0 24px' },
 }
