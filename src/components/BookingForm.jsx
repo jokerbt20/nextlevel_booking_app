@@ -1,10 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getAdminAddons, getAdminBookingProducts, getOffers, getTakenSlots } from '../api/catalog'
+import {
+  getAdminAddons,
+  getAdminBookingProducts,
+  getOffers,
+  getPublicBookingProducts,
+  getTakenSlots,
+} from '../api/catalog'
 import { createAdminBooking, updateBooking } from '../api/bookings'
 import {
   KIDS_PER_PIZZA,
   PIZZA_PREFIX,
   fromAdminProduct,
+  fromProduct,
   fromService,
   groupByCategory,
   isAdultsItem,
@@ -104,14 +111,20 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
     getOffers().then(setTiers).catch(() => {})
     Promise.all([
       getAdminAddons().catch(() => []),
-      getAdminBookingProducts().catch(() => []),
+      getAdminBookingProducts()
+        .catch(() => [])
+        .then(async (list) =>
+          // Without products there are no pizzas to pick, so fall back to the
+          // public list of the same bookable products rather than show nothing.
+          list.length > 0 ? list.map(fromAdminProduct) : (await getPublicBookingProducts().catch(() => [])).map(fromProduct),
+        ),
     ])
       .then(([services, products]) => {
         setCatalogue([
           // Retired goods are excluded: they live in the product catalogue now,
           // so offering both would list every pizza twice.
           ...services.filter((s) => s.kind === 'service' && s.isActive).map(fromService),
-          ...products.map(fromAdminProduct).map((p) =>
+          ...products.map((p) =>
             // An edit is charged at the prices of the day the booking was made,
             // so the form shows those rather than today's list price.
             booking?.productPrices?.[p.productId] != null
@@ -470,8 +483,16 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
                     update({ tierId: active ? null : t.id })
                     if (!isEdit) setPizzaQtyMap({})
                   }}
-                  style={active && t.colorHex ? { background: t.colorHex, borderColor: t.colorHex } : undefined}
+                  style={
+                    active && t.colorHex
+                      ? { background: t.colorHex, borderColor: t.colorHex, color: '#fff' }
+                      : { display: 'inline-flex', alignItems: 'center', gap: 7 }
+                  }
                 >
+                  {/* Each package in its own colour, the same as its badge in the lists. */}
+                  {!active && (
+                    <span style={{ width: 8, height: 8, borderRadius: 4, background: t.colorHex || color.violet }} />
+                  )}
                   {t.name}
                 </Chip>
               )
@@ -491,22 +512,16 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
               </b>
             </p>
           )}
-        </Section>
 
-        {/* ── Items for the birthday ──────────────────────────────────────────
-            Split the way the website splits it. The kids' food IS the package:
-            free pizzas at one per four children, plus the kid services. Anything
-            bought on top is ordered from the adults' menu, which is why every
-            product in the catalogue carries audience 'adults'. */}
-
-        <Section
-          title="For the Kids"
-          action={
-            kidsSubtotal > 0 ? <Badge tone="primary">{formatCurrency(kidsSubtotal)}</Badge> : null
-          }
-        >
-          {/* Always offered when editing, so an admin can correct the flavours
-              even if the current package would not include pizzas. */}
+          {/* The kids' free pizzas belong to the package, so they are picked right
+              here. Always offered when editing, so an admin can correct the
+              flavours even if the current package would not include pizzas. */}
+          {!selectedTier && !isEdit && (
+            <p style={styles.pizzaHint}>
+              <Icon name="pizza" size={15} strokeWidth={2.2} style={{ color: color.warning, flexShrink: 0 }} />
+              Choose a package to pick the kids’ pizzas.
+            </p>
+          )}
           {allPizzaTypes.length > 0 && (tierIncludesPizza || isEdit) && (
             <button type="button" style={styles.pizzaButton} onClick={() => setShowPizza(true)}>
               <IconTile name="pizza" tint="var(--orange)" size={36} />
@@ -525,6 +540,20 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
             </button>
           )}
 
+        </Section>
+
+        {/* ── Items for the birthday ──────────────────────────────────────────
+            Split the way the website splits it. The kids' food IS the package:
+            free pizzas at one per four children, plus the kid services. Anything
+            bought on top is ordered from the adults' menu, which is why every
+            product in the catalogue carries audience 'adults'. */}
+
+        <Section
+          title="For the Kids"
+          action={
+            kidsSubtotal > 0 ? <Badge tone="primary">{formatCurrency(kidsSubtotal)}</Badge> : null
+          }
+        >
           {paidKidsGroups.map(({ category, items }) => (
             <ItemGroup
               key={category}
@@ -540,8 +569,8 @@ export default function BookingForm({ booking, initialDate, onSaved, onCancel })
           )}
           {paidKidsGroups.length === 0 && allPizzaTypes.length > 0 && (
             <p style={styles.hint}>
-              Everything else for the children is covered by the package. Extra food is ordered
-              below.
+              The free pizzas are picked under Package above. Everything else for the children is
+              covered by the package; extra food is ordered below.
             </p>
           )}
         </Section>
@@ -717,11 +746,13 @@ const styles = {
 
   tierPrice: { ...font.subhead },
 
+  pizzaHint: { ...font.subhead, display: 'flex', alignItems: 'center', gap: 6, marginTop: 12 },
   pizzaButton: {
     display: 'flex',
     alignItems: 'center',
     gap: 12,
     width: '100%',
+    marginTop: 12,
     textAlign: 'left',
     background: color.surfaceMuted,
     border: 'none',

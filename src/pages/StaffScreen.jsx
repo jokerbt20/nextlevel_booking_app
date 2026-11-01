@@ -5,7 +5,8 @@ import { TIME_OFF_TONE, parseDay } from '../lib/staffMk'
 import Header from '../components/Header'
 import Icon from '../components/Icon'
 import CrewSheet from '../components/CrewSheet'
-import { DateTile } from '../components/BookingRow'
+import { DateTile, packageMist } from '../components/BookingRow'
+import { useTierColors } from '../lib/tiers'
 import {
   Badge,
   Button,
@@ -13,6 +14,7 @@ import {
   EmptyState,
   ErrorState,
   Input,
+  PackageBadge,
   Segmented,
   Sheet,
   SkeletonList,
@@ -101,6 +103,7 @@ export default function StaffScreen() {
 /* ── Crew: every party in the month, against the girls it needs ─────────────── */
 
 function CrewView({ year, month }) {
+  const tierColor = useTierColors()
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [onlyShort, setOnlyShort] = useState(false)
@@ -167,7 +170,11 @@ function CrewView({ year, month }) {
                 key={e.bookingId}
                 type="button"
                 className="cell-button"
-                style={{ ...styles.eventRow, ...(past ? { opacity: 0.55 } : {}) }}
+                style={{
+                  ...styles.eventRow,
+                  backgroundImage: e.tierName ? packageMist(tierColor(e.tierName)) : undefined,
+                  ...(past ? { opacity: 0.55 } : {}),
+                }}
                 onClick={() => setEditing(e)}
               >
                 <DateTile iso={e.eventDate} />
@@ -178,9 +185,13 @@ function CrewView({ year, month }) {
                   </span>
                   <span style={styles.eventSub}>
                     {formatTime(e.eventDate) ?? '—'} · {e.kidsCount} kids
-                    {e.tierName ? ` · ${e.tierName}` : ''}
-                    {e.status !== 'confirmed' ? ' · not confirmed' : ''}
+                    {e.status !== 'confirmed' && (
+                      <span style={{ color: color.danger, fontWeight: 600 }}> · not confirmed</span>
+                    )}
                   </span>
+                  {e.tierName && (
+                    <PackageBadge name={e.tierName} accent={tierColor(e.tierName)} style={{ marginTop: 4, padding: '1px 7px', fontSize: 11 }} />
+                  )}
                   <span style={styles.crewLine}>
                     {e.assignments.length === 0 ? (
                       <span style={{ ...font.footnote, color: past ? color.muted : color.danger }}>Nobody on it</span>
@@ -196,7 +207,7 @@ function CrewView({ year, month }) {
                   </span>
                 </span>
                 {e.suggestedCrew > 0 ? (
-                  <Badge tone={short ? 'warning' : 'success'}>
+                  <Badge tone={short ? 'warning' : 'violet'}>
                     {e.assignments.length}/{e.suggestedCrew}
                   </Badge>
                 ) : (
@@ -519,7 +530,7 @@ const styles = {
     gap: 12,
     width: '100%',
     padding: '10px 14px',
-    background: 'transparent',
+    backgroundColor: 'transparent',
     border: 'none',
     textAlign: 'left',
     color: color.text,

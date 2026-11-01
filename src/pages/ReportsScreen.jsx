@@ -244,7 +244,7 @@ function MoneyTab({ period }) {
           soft={color.tealSoft}
           title="Booked ahead"
           lines={[
-            [`${data.pipelineEvents} parties`, null],
+            [`${data.pipelineEvents ?? 0} parties`, null],
             [formatCurrency(data.pipelineRevenue), 'revenue'],
             [formatCurrency(data.pipelineProfit), 'profit'],
           ]}

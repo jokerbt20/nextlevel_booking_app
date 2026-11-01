@@ -373,9 +373,10 @@ const styles = {
     fontWeight: 400,
     color: color.text,
   },
-  todayNumber: { color: color.danger, fontWeight: 600 },
+  // Today in indigo, the app's colour for "now"; red is kept for "not confirmed".
+  todayNumber: { color: color.indigo, fontWeight: 700 },
   selectedNumber: { background: color.text, color: color.surface, fontWeight: 600 },
-  selectedToday: { background: color.danger, color: '#fff', fontWeight: 600 },
+  selectedToday: { background: color.indigo, color: '#fff', fontWeight: 600 },
   dotRow: { display: 'flex', alignItems: 'center', gap: 3, height: 5 },
   dot: { width: 5, height: 5, borderRadius: 3 },
   dotUnconfirmed: { width: 6, height: 6, background: 'transparent', boxShadow: `inset 0 0 0 1.5px ${color.danger}` },

@@ -7,6 +7,7 @@
  * aria-label on the button, never on the glyph.
  */
 const PATHS = {
+  list: <path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01" />,
   calendar: (
     <>
       <rect x="3.5" y="5" width="17" height="15.5" rx="3.5" />

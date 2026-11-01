@@ -23,3 +23,10 @@ export const getAdminAddons = () => apiRequest('/admin/addons')
 /** Every product that can be ordered with a booking. */
 export const getAdminBookingProducts = () =>
   apiRequest('/admin/inventory/products', { params: { bookingAddon: true, activeOnly: true } })
+
+/**
+ * The same bookable products from the public feed — what the website's booking
+ * form offers. Used only when the admin list comes back empty, so the kids'
+ * pizzas can always be picked.
+ */
+export const getPublicBookingProducts = () => apiRequest('/website/booking-products')

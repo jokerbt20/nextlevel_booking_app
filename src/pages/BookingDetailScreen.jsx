@@ -16,23 +16,19 @@ import {
   formatCurrency,
   formatLongDate,
   formatTime,
-  girlsLabel,
   toDateKey,
   toTimeKey,
 } from '../utils/format'
 import Header, { BarButton } from '../components/Header'
 import Icon from '../components/Icon'
-import { DateTile } from '../components/BookingRow'
+import { BookingFlags, DateTile, PartyBadges, packageMist } from '../components/BookingRow'
 import EditBookingScreen from './EditBookingScreen'
 import ConsumptionScreen from './ConsumptionScreen'
 import SupplierOrderSheet from '../components/SupplierOrderSheet'
 import CrewSheet from '../components/CrewSheet'
 import {
   Badge,
-  CountBadge,
   IconTile,
-  OrderBadge,
-  PackageBadge,
   Button,
   ErrorState,
   Field,
@@ -43,7 +39,6 @@ import {
   Segmented,
   Sheet,
   SkeletonList,
-  StatusBadge,
 } from '../components/ui'
 import { color, font, shadow } from '../theme'
 
@@ -209,28 +204,37 @@ export default function BookingDetailScreen({ bookingId, onBack, onChanged }) {
       />
 
       <div style={styles.container}>
-        {/* Who and when — the thing you open the screen to find out. */}
-        <div style={styles.hero}>
-          <DateTile iso={booking.eventDate} size="lg" />
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <h1 style={styles.heroName}>{customerName || 'Unknown customer'}</h1>
-            <p style={styles.heroWhen}>
-              {formatLongDate(booking.eventDate)}
-              {time ? ` · ${time}` : ''}
-            </p>
-            <div style={styles.heroMeta}>
-              <StatusBadge status={booking.status} />
-              <OrderBadge isComplete={booking.isOrderComplete} />
-              <PackageBadge name={booking.tierName} accent={tierColor(booking.tierId)} />
-              <CountBadge icon="people" value={`${booking.kidsCount} kids`} tone="primary" />
-              {booking.adultsCount > 0 && (
-                <CountBadge icon="person" value={`${booking.adultsCount} adults`} tone="teal" />
-              )}
-              {girlsLabel(booking.girlsNeeded) && (
-                <CountBadge icon="sparkles" value={girlsLabel(booking.girlsNeeded)} tone="pink" />
+        {/* Who and when — the thing you open the screen to find out — on the
+            same package mist and badges as the booking's row in the list. */}
+        <div style={{ ...styles.hero, backgroundImage: packageMist(tierColor(booking.tierId), 22) }}>
+          <div style={styles.heroTop}>
+            <DateTile iso={booking.eventDate} size="lg" />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <h1 style={styles.heroName}>{customerName || 'Unknown customer'}</h1>
+              <p style={styles.heroWhen}>
+                {formatLongDate(booking.eventDate)}
+                {time ? ` · ${time}` : ''}
+              </p>
+              {booking.kidName && (
+                <p style={styles.heroKid}>
+                  <Icon name="balloon" size={14} strokeWidth={2.2} style={{ color: color.pink }} />
+                  {booking.kidAge != null ? `${booking.kidName} turns ${booking.kidAge}` : `${booking.kidName}’s party`}
+                </p>
               )}
             </div>
           </div>
+          <PartyBadges
+            booking={{ ...booking, suggestedCrew: booking.girlsNeeded }}
+            accent={tierColor(booking.tierId)}
+            style={{ marginTop: 14 }}
+          />
+          {/* The order card right below speaks for the call, so only status shows here. */}
+          <BookingFlags
+            booking={booking}
+            showCall={false}
+            upcoming={!booking.eventDate || new Date(booking.eventDate).getTime() >= Date.now()}
+            style={{ marginTop: 6 }}
+          />
         </div>
 
         {/* One tap to reach the parent, like the action row in Contacts. */}
@@ -265,15 +269,15 @@ export default function BookingDetailScreen({ bookingId, onBack, onChanged }) {
         <Section title="Party">
           {booking.kidName && <Row icon="balloon" tint={color.pink} label="Birthday child" value={booking.kidName} bold />}
           {booking.kidAge != null && (
-            <Row icon="sparkles" tint={color.warning} label="Turning" value={<Badge tone="pink">{booking.kidAge}</Badge>} />
+            <Row icon="sparkles" tint={color.pink} label="Turning" value={String(booking.kidAge)} bold />
           )}
-          <Row icon="people" tint={color.primary} label="Kids" value={String(booking.kidsCount ?? 0)} bold />
+          <Row icon="people" tint={color.teal} label="Kids" value={String(booking.kidsCount ?? 0)} bold />
           {booking.adultsCount > 0 && (
-            <Row icon="person" tint={color.teal} label="Adults" value={String(booking.adultsCount)} bold />
+            <Row icon="person" tint="var(--label-2)" label="Adults" value={String(booking.adultsCount)} bold />
           )}
           <Row
             icon="sparkles"
-            tint={color.pink}
+            tint={color.violet}
             label="Girls needed"
             value={booking.girlsNeeded > 0 ? String(booking.girlsNeeded) : 'Not set'}
             bold={booking.girlsNeeded > 0}
@@ -478,7 +482,7 @@ function FoodOrder({ lines, pizzaNote }) {
                 <span style={styles.qty}>{Number(line.quantity)}×</span>
                 <span style={styles.foodName}>{line.name}</span>
                 {line.included ? (
-                  <Badge tone="success">Included</Badge>
+                  <Badge tone="slate">Included</Badge>
                 ) : (
                   <span style={styles.foodPrice}>{formatCurrency(line.lineTotal)}</span>
                 )}
@@ -537,8 +541,9 @@ function OrderCard({ booking, canEdit, busy, onToggle }) {
     ? new Date(booking.orderCompletedAt).toLocaleString(undefined, {
         day: 'numeric',
         month: 'short',
-        hour: 'numeric',
+        hour: '2-digit',
         minute: '2-digit',
+        hourCycle: 'h23',
       })
     : null
 
@@ -601,12 +606,18 @@ function QuickAction({ icon, label, href }) {
 const styles = {
   container: { padding: '8px 16px 48px', display: 'flex', flexDirection: 'column', gap: 22 },
 
-  hero: { display: 'flex', alignItems: 'center', gap: 16, padding: '4px 4px 0' },
+  hero: {
+    padding: '16px 16px 16px',
+    borderRadius: 22,
+    backgroundColor: color.surface,
+    boxShadow: shadow.md,
+  },
+  heroTop: { display: 'flex', alignItems: 'center', gap: 14 },
   heroName: { ...font.title1, overflowWrap: 'anywhere' },
   heroWhen: { ...font.subhead, marginTop: 2 },
-  heroMeta: { display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 },
+  heroKid: { ...font.subhead, color: color.text, marginTop: 3, display: 'flex', alignItems: 'center', gap: 5 },
 
-  quick: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: -6 },
+  quick: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: -10 },
   quickAction: {
     display: 'flex',
     flexDirection: 'column',
@@ -652,8 +663,8 @@ const styles = {
     textAlign: 'center',
     padding: '1px 6px',
     borderRadius: 999,
-    background: color.primarySoft,
-    color: color.primary,
+    background: color.surfaceMuted,
+    color: color.text,
     fontSize: 12,
     fontWeight: 700,
     flexShrink: 0,

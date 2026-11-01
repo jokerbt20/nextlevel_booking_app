@@ -1,84 +1,116 @@
-import { formatCurrency, formatTime, girlsLabel, STATUS_COLOR } from '../utils/format'
+import { formatCurrency, formatTime, girlsLabel, STATUS_LABEL } from '../utils/format'
 import { color, font } from '../theme'
 import Icon from './Icon'
-import { PackageBadge, StatusBadge } from './ui'
+import { Badge, CountBadge, PackageBadge } from './ui'
 
 export const bookingName = (b) =>
   [b.customerName, b.customerLastName].filter(Boolean).join(' ') || 'Unknown customer'
 
+const srOnly = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }
+
+/** Not confirmed yet: red stripes, the web calendar's mark for "call to confirm". */
+const UNCONFIRMED = `repeating-linear-gradient(135deg, ${color.danger} 0 3px, ${color.dangerSoft} 3px 6px)`
+
 /**
- * A booking as one calendar-style row: start time, a status-coloured bar (the
- * way Calendar marks an event), who and what, and the price. Status is always
- * written out beside its colour.
- *
- * Upcoming parties also say whether the order is taken: an orange phone means
- * someone still has to call the customer, a green check means it is ready.
+ * A mist of the package colour drifting in from the left edge, so BASIC, PRO
+ * and EXPERT parties tell themselves apart before anything is read.
  */
-export default function BookingRow({ booking, onClick, showTime = true, accent }) {
+export const packageMist = (accent, strength = 18) =>
+  accent
+    ? `linear-gradient(90deg, color-mix(in srgb, ${accent} ${strength}%, transparent) 0%, color-mix(in srgb, ${accent} ${Math.round(strength / 3)}%, transparent) 35%, transparent 70%)`
+    : undefined
+
+/** "PRO · 18 kids · 10 adults · 3 girls" — the party in one plain line, for screen readers. */
+export function partyLine(b) {
+  const girls = girlsLabel(b.suggestedCrew)
+  return [
+    b.tierName,
+    b.kidsCount != null ? `${b.kidsCount} kids` : null,
+    b.adultsCount > 0 ? `${b.adultsCount} adults` : null,
+    girls ? `${girls} needed` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+}
+
+/**
+ * The party as badges: the package in its own colour, then kids (teal), adults
+ * (grey) and girls needed (pink). Each colour means one thing everywhere.
+ */
+export function PartyBadges({ booking, accent, style }) {
+  return (
+    <span style={{ ...styles.badges, ...style }}>
+      <span style={srOnly}>{partyLine(booking)}</span>
+      <PackageBadge name={booking.tierName} accent={accent ?? color.violet} style={styles.badge} />
+      <span aria-hidden="true" style={styles.badges}>
+        {booking.kidsCount != null && <CountBadge icon="people" value={booking.kidsCount} tone="teal" style={styles.badge} />}
+        {booking.adultsCount > 0 && <CountBadge icon="person" value={booking.adultsCount} tone="slate" style={styles.badge} />}
+        {booking.suggestedCrew > 0 && <CountBadge icon="sparkles" value={booking.suggestedCrew} tone="violet" style={styles.badge} />}
+      </span>
+    </span>
+  )
+}
+
+/**
+ * Where the party stands, as filled badges: red with stripes when it is not
+ * confirmed, orange when someone still has to call, and green "Ready" when
+ * there is nothing left to do. Each is a word, never just a colour.
+ */
+export function BookingFlags({ booking, upcoming = true, showCall = true, style }) {
+  const confirmed = booking.status === 'confirmed'
+  const call = upcoming && booking.isOrderComplete !== true
+  if (confirmed && !call && !upcoming) return null
+  return (
+    <span style={{ ...styles.badges, ...style }}>
+      {!confirmed && (
+        <Badge tone="danger" style={styles.badge}>
+          <span style={{ ...styles.swatch, background: UNCONFIRMED }} aria-hidden="true" />
+          {STATUS_LABEL[booking.status] ?? booking.status}
+        </Badge>
+      )}
+      {call && showCall && (
+        <Badge tone="warning" style={styles.badge}>
+          <Icon name="phone" size={12} strokeWidth={2.6} />
+          Needs call
+        </Badge>
+      )}
+      {confirmed && !call && (
+        <Badge tone="success" style={styles.badge}>
+          <Icon name="check" size={12} strokeWidth={2.8} />
+          Ready
+        </Badge>
+      )}
+    </span>
+  )
+}
+
+/**
+ * A booking as one calendar-style row: start time, a bar that is solid when
+ * the party is confirmed and striped when it is not, who and the price, the
+ * party as badges, and where it stands. The call list
+ * turns off the price and the call flag to make room for its Call button.
+ */
+export default function BookingRow({ booking, onClick, accent, showTime = true, showPrice = true, showCall = true }) {
   const time = formatTime(booking.eventDate)
   const upcoming = !booking.eventDate || new Date(booking.eventDate).getTime() >= Date.now()
-  const ready = booking.isOrderComplete === true
-  const statusColor = STATUS_COLOR[booking.status] ?? color.muted
-  const girls = girlsLabel(booking.suggestedCrew)
-  const guests =
-    `${booking.kidsCount} kids` +
-    (booking.adultsCount > 0 ? ` · ${booking.adultsCount} adults` : '') +
-    (girls ? ` · ${girls} needed` : '')
+  const confirmed = booking.status === 'confirmed'
 
   return (
-    <button type="button" className="cell-button" style={styles.row} onClick={onClick}>
-      {showTime && (
-        <span style={styles.time}>
-          {time ?? '—'}
-        </span>
-      )}
-      {/* Not confirmed yet: red stripes, the web calendar's mark for "call to confirm". */}
-      <span
-        style={{
-          ...styles.bar,
-          background:
-            booking.status === 'confirmed'
-              ? statusColor
-              : `repeating-linear-gradient(135deg, ${color.danger} 0 3px, ${color.dangerSoft} 3px 6px)`,
-        }}
-      />
+    <button
+      type="button"
+      className="cell-button"
+      style={{ ...styles.row, backgroundImage: packageMist(accent) }}
+      onClick={onClick}
+    >
+      {showTime && <span style={styles.time}>{time ?? '—'}</span>}
+      <span style={{ ...styles.bar, background: confirmed ? color.success : UNCONFIRMED }} aria-hidden="true" />
       <span style={styles.body}>
         <span style={styles.nameLine}>
-          {upcoming && (
-            <span
-              title={ready ? 'Order ready' : 'Needs call'}
-              style={{ ...styles.order, color: ready ? color.success : color.warning, background: ready ? color.successSoft : color.warningSoft }}
-            >
-              <Icon name={ready ? 'check' : 'phone'} size={11} strokeWidth={2.8} />
-            </span>
-          )}
           <span style={styles.name}>{bookingName(booking)}</span>
-          {upcoming && <span style={styles.srOnly}>{ready ? ', order ready' : ', needs call'}</span>}
-          <span style={styles.price}>{formatCurrency(booking.totalPrice)}</span>
+          {showPrice && <span style={styles.price}>{formatCurrency(booking.totalPrice)}</span>}
         </span>
-        <span style={styles.metaLine}>
-          <StatusBadge status={booking.status} style={styles.pkg} />
-          <PackageBadge name={booking.tierName} accent={accent ?? '#8b5cf6'} style={styles.pkg} />
-          <span style={styles.guests}>
-            <Icon name="people" size={13} strokeWidth={2.2} style={{ color: color.primary }} />
-            {booking.kidsCount}
-            {booking.adultsCount > 0 && (
-              <>
-                <Icon name="person" size={12} strokeWidth={2.2} style={{ color: color.teal, marginLeft: 6 }} />
-                {booking.adultsCount}
-              </>
-            )}
-            {girls && (
-              <>
-                <Icon name="sparkles" size={12} strokeWidth={2.2} style={{ color: color.pink, marginLeft: 6 }} />
-                {booking.suggestedCrew}
-              </>
-            )}
-            <span style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}>
-              {guests}
-            </span>
-          </span>
-        </span>
+        <PartyBadges booking={booking} accent={accent} style={{ marginTop: 5 }} />
+        <BookingFlags booking={booking} upcoming={upcoming} showCall={showCall} style={{ marginTop: 5 }} />
       </span>
       <Icon name="chevronRight" size={15} strokeWidth={2.4} style={{ color: color.faint }} />
     </button>
@@ -105,30 +137,20 @@ const styles = {
   row: {
     display: 'flex',
     alignItems: 'center',
-    gap: 12,
+    gap: 9,
     width: '100%',
-    minHeight: 58,
-    padding: '10px 14px 10px 16px',
-    background: 'transparent',
+    minHeight: 60,
+    padding: '11px 12px 11px 14px',
+    backgroundColor: 'transparent',
     border: 'none',
     textAlign: 'left',
     color: color.text,
   },
-  // Wide enough for a 12-hour "10:30 PM"; never wraps.
-  time: { minWidth: 44, flexShrink: 0, fontSize: 13, fontWeight: 600, color: color.text, whiteSpace: 'nowrap' },
+  // A 24-hour "17:00" needs little room, which the badges get instead.
+  time: { minWidth: 34, flexShrink: 0, alignSelf: 'flex-start', paddingTop: 2, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' },
   bar: { width: 4, alignSelf: 'stretch', borderRadius: 2, flexShrink: 0 },
   body: { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 },
-  nameLine: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 },
-  order: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  srOnly: { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' },
+  nameLine: { display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 },
   name: {
     ...font.headline,
     flex: 1,
@@ -137,28 +159,11 @@ const styles = {
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
-  meta: {
-    fontSize: 13,
-    color: color.muted,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  // Badges wrap onto a second line on narrow phones rather than colliding.
-  metaLine: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, minWidth: 0, marginTop: 4 },
-  pkg: { padding: '1px 7px', fontSize: 11 },
-  guests: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: 3,
-    fontSize: 12,
-    fontWeight: 600,
-    color: color.muted,
-    flexShrink: 0,
-  },
-  trail: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, flexShrink: 0 },
-  price: { fontSize: 13, fontWeight: 600, color: color.text, flexShrink: 0, marginLeft: 6 },
-  status: { fontSize: 11, fontWeight: 600 },
+  price: { fontSize: 13, fontWeight: 600, color: color.text, flexShrink: 0 },
+  meta: { ...font.subhead },
+  badges: { display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 5, minWidth: 0 },
+  badge: { padding: '2px 8px', fontSize: 12, lineHeight: '16px' },
+  swatch: { width: 9, height: 9, borderRadius: 2, flexShrink: 0 },
 
   tile: {
     display: 'inline-flex',

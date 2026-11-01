@@ -44,8 +44,13 @@ export function useTiers() {
   return tiers
 }
 
-/** tierId → colour, falling back to violet. */
+/**
+ * Package → colour, falling back to violet. Takes the tier id, or its name
+ * where only the name comes with the data (the staff screens).
+ */
 export function useTierColors() {
   const tiers = useTiers()
-  return (tierId) => tiers.find((t) => t.id === tierId)?.color ?? FALLBACK
+  return (tier) =>
+    tiers.find((t) => (typeof tier === 'string' ? t.name.toLowerCase() === tier.toLowerCase() : t.id === tier))
+      ?.color ?? FALLBACK
 }

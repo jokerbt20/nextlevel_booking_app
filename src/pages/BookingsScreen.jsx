@@ -4,21 +4,10 @@ import { useAuth } from '../contexts/AuthContext'
 import { formatCountdown, formatCurrency, formatRelativeDay, formatTime, needsCall, toDateKey } from '../utils/format'
 import BookingDetailScreen from './BookingDetailScreen'
 import CalendarView from '../components/CalendarView'
-import BookingRow, { DateTile, bookingName } from '../components/BookingRow'
+import BookingRow, { BookingFlags, PartyBadges, bookingName, packageMist } from '../components/BookingRow'
 import Header, { BarButton } from '../components/Header'
 import Icon from '../components/Icon'
-import {
-  Badge,
-  CountBadge,
-  EmptyState,
-  ErrorState,
-  OrderBadge,
-  PackageBadge,
-  SearchField,
-  Segmented,
-  SkeletonList,
-  StatusBadge,
-} from '../components/ui'
+import { EmptyState, ErrorState, SearchField, SkeletonList } from '../components/ui'
 import { useTierColors } from '../lib/tiers'
 import { color, font, radius, shadow } from '../theme'
 
@@ -32,11 +21,6 @@ const FILTERS = [
   { key: 'in_plan', label: 'In Plan' },
   { key: 'confirmed', label: 'Confirmed' },
   { key: 'finished', label: 'Finished' },
-]
-
-const VIEWS = [
-  { key: 'list', label: 'List' },
-  { key: 'calendar', label: 'Calendar' },
 ]
 
 // A party stays in Upcoming while it is going on: it only counts as finished
@@ -177,6 +161,12 @@ export default function BookingsScreen({ refreshKey, pendingBookingId, onConsume
         title="Bookings"
         right={
           <>
+            <BarButton
+              label={view === 'list' ? 'Show calendar' : 'Show list'}
+              onClick={() => setView(view === 'list' ? 'calendar' : 'list')}
+            >
+              <Icon name={view === 'list' ? 'calendar' : 'list'} size={23} strokeWidth={2.1} />
+            </BarButton>
             <BarButton label="Refresh" onClick={load} disabled={isRefreshing}>
               <Icon
                 name="refresh"
@@ -196,8 +186,6 @@ export default function BookingsScreen({ refreshKey, pendingBookingId, onConsume
 
       <div style={styles.container}>
         <SearchField value={query} onChange={setQuery} placeholder="Name, phone or package" />
-
-        <Segmented options={VIEWS} value={view} onChange={setView} />
 
         <div className="no-scrollbar" style={styles.filterRow} role="radiogroup" aria-label="Filter bookings">
           {FILTERS.map((f) => {
@@ -266,22 +254,6 @@ export default function BookingsScreen({ refreshKey, pendingBookingId, onConsume
           />
         )}
 
-        {/* The call list, surfaced where it can't be missed. */}
-        {ready && view === 'list' && filter === 'all' && !query && counts.needs_call > 0 && (
-          <button type="button" className="pressable" style={styles.callBanner} onClick={() => setFilter('needs_call')}>
-            <span style={styles.callIcon}>
-              <Icon name="phone" size={16} strokeWidth={2.2} />
-            </span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ ...styles.callTitle, display: 'block' }}>
-                {counts.needs_call} {counts.needs_call === 1 ? 'party needs' : 'parties need'} a call
-              </span>
-              <span style={{ ...styles.callSub, display: 'block' }}>Their order isn’t taken yet. Tap to see who.</span>
-            </span>
-            <Icon name="chevronRight" size={15} strokeWidth={2.4} style={{ color: color.muted }} />
-          </button>
-        )}
-
         {ready && view === 'list' && nextUp && (
           <NextUpCard booking={nextUp} accent={tierColor(nextUp.tierId)} onClick={() => setSelectedId(nextUp.id)} />
         )}
@@ -290,31 +262,27 @@ export default function BookingsScreen({ refreshKey, pendingBookingId, onConsume
           view === 'list' &&
           groupByDay(rest).map((group) => (
             <section key={`${group.key}-${group.items[0].id}`}>
-              <p style={styles.dayHeader}>
-                <span
-                  style={{
-                    ...styles.dayName,
-                    // Today in Calendar red, tomorrow in the accent — the two days that matter most.
-                    ...(group.iso && formatRelativeDay(group.iso) === 'Today' ? { color: color.danger } : {}),
-                    ...(group.iso && formatRelativeDay(group.iso) === 'Tomorrow' ? { color: color.primary } : {}),
-                  }}
-                >
-                  {group.iso ? formatRelativeDay(group.iso) : 'No Date Set'}
-                </span>
+              <h2 style={styles.dayHeader}>
+                <span style={styles.dayName}>{group.iso ? formatRelativeDay(group.iso) : 'No Date Set'}</span>
                 {group.iso && !/\d/.test(formatRelativeDay(group.iso)) && (
                   <span style={styles.dayDate}>
                     {new Date(group.iso).toLocaleDateString(undefined, { day: 'numeric', month: 'long' })}
                   </span>
                 )}
-                <span style={styles.dayCount}>{group.items.length}</span>
-              </p>
+              </h2>
               <div className="cell-list" style={styles.group}>
                 {group.items.map((booking) =>
                   // In the call list each row gets a one-tap Call beside it.
                   filter === 'needs_call' && booking.customerPhone ? (
                     <div key={booking.id} style={styles.callRow}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <BookingRow booking={booking} accent={tierColor(booking.tierId)} onClick={() => setSelectedId(booking.id)} />
+                        <BookingRow
+                          booking={booking}
+                          accent={tierColor(booking.tierId)}
+                          showPrice={false}
+                          showCall={false}
+                          onClick={() => setSelectedId(booking.id)}
+                        />
                       </div>
                       <a
                         href={`tel:${booking.customerPhone}`}
@@ -326,12 +294,7 @@ export default function BookingsScreen({ refreshKey, pendingBookingId, onConsume
                       </a>
                     </div>
                   ) : (
-                    <BookingRow
-                      key={booking.id}
-                      booking={booking}
-                      accent={tierColor(booking.tierId)}
-                      onClick={() => setSelectedId(booking.id)}
-                    />
+                    <BookingRow key={booking.id} booking={booking} accent={tierColor(booking.tierId)} onClick={() => setSelectedId(booking.id)} />
                   ),
                 )}
               </div>
@@ -342,92 +305,87 @@ export default function BookingsScreen({ refreshKey, pendingBookingId, onConsume
   )
 }
 
+function timeLeft(ms) {
+  const mins = Math.max(0, Math.round(ms / 60_000))
+  if (mins < 60) return `${mins} min left`
+  const h = Math.floor(mins / 60)
+  const m = mins % 60
+  return m ? `${h} h ${m} min left` : `${h} h left`
+}
+
 /**
- * The next party, given room: a Calendar-style date tile, who it is for, and
- * how long until the doors open. It is the one thing staff open the app to see.
+ * The party on right now, or the next one: the one thing staff open the app to
+ * see. It is named after the child, because it is their day, and it is the only
+ * place on the screen that uses the party colour. While a party is on, a bar
+ * shows how far through it the room is.
  */
 function NextUpCard({ booking, accent, onClick }) {
-  const time = formatTime(booking.eventDate)
+  // Keeps "45 min left" and the bar honest while the screen stays open.
+  const [, setTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 60_000)
+    return () => clearInterval(id)
+  }, [])
+
   const live = isLive(booking)
-  const countdown = live ? 'On now' : formatCountdown(booking.eventDate)
-  // Inside two days the countdown turns orange: that is the window to chase anything open.
-  const soon = booking.eventDate && new Date(booking.eventDate).getTime() - Date.now() < 48 * 3_600_000
-  const child =
-    booking.kidName && booking.kidAge != null
+  const start = new Date(booking.eventDate).getTime()
+  const length = PARTY_HOURS * 3_600_000
+  const done = live ? Math.min(1, (Date.now() - start) / length) : 0
+  const time = formatTime(booking.eventDate)
+  const title = booking.kidName
+    ? booking.kidAge != null
       ? `${booking.kidName} turns ${booking.kidAge}`
-      : booking.kidName
-        ? `${booking.kidName}’s party`
-        : null
+      : `${booking.kidName}’s party`
+    : bookingName(booking)
+
   return (
     <button
       type="button"
       className="pressable"
-      style={{ ...styles.next, borderTop: `4px solid ${accent}` }}
+      style={{ ...styles.next, backgroundImage: packageMist(accent, 22) }}
       onClick={onClick}
     >
       <span style={styles.nextTop}>
-        <span style={styles.nextEyebrow}>
-          <Icon name="sparkles" size={16} strokeWidth={2} />
+        <span style={styles.eyebrow}>
+          {live ? (
+            <span className="live-dot" style={styles.liveDot} aria-hidden="true" />
+          ) : (
+            <Icon name="balloon" size={15} strokeWidth={2.2} />
+          )}
           {live ? 'Happening Now' : 'Next Party'}
         </span>
-        {countdown && (
-          <Badge tone={live ? 'success' : soon ? 'warning' : 'primary'}>
-            <Icon name="clock" size={12} strokeWidth={2.4} />
-            {countdown}
-          </Badge>
-        )}
-      </span>
-
-      <span style={styles.nextMain}>
-        <DateTile iso={booking.eventDate} size="lg" />
-        <span style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column' }}>
-          <span style={styles.nextName}>{bookingName(booking)}</span>
-          <span style={styles.nextWhen}>
-            {formatRelativeDay(booking.eventDate)}
-            {time ? ` at ${time}` : ''}
-          </span>
-          {child && (
-            <span style={styles.nextChild}>
-              <Icon name="balloon" size={14} strokeWidth={2} style={{ color: color.pink }} />
-              {child}
-            </span>
-          )}
+        <span style={styles.countdown}>
+          {live ? timeLeft(start + length - Date.now()) : formatCountdown(booking.eventDate)}
         </span>
+        <Icon name="chevronRight" size={15} strokeWidth={2.4} style={{ color: color.faint }} />
       </span>
 
-      <span style={styles.nextStats}>
-        <Stat label="Package" value={<PackageBadge name={booking.tierName} accent={accent} />} />
-        <Stat
-          label="Guests"
-          value={
-            <span style={{ display: 'inline-flex', gap: 5 }}>
-              <CountBadge icon="people" value={booking.kidsCount} tone="primary" />
-              {booking.adultsCount > 0 && <CountBadge icon="person" value={booking.adultsCount} tone="teal" />}
-            </span>
-          }
-        />
-        <Stat label="Total" value={<span style={{ color: color.success }}>{formatCurrency(booking.totalPrice)}</span>} />
+      <span style={styles.nextTitle}>{title}</span>
+      <span style={styles.nextSub}>
+        {formatRelativeDay(booking.eventDate)}
+        {time ? ` at ${time}` : ''}
+        {booking.kidName ? ` · ${bookingName(booking)}` : ''}
       </span>
+
+      {live && (
+        <span
+          style={styles.track}
+          role="progressbar"
+          aria-label="Party progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(done * 100)}
+        >
+          <span style={{ ...styles.trackFill, width: `${done * 100}%` }} />
+        </span>
+      )}
 
       <span style={styles.nextFoot}>
-        <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          <StatusBadge status={booking.status} />
-          <OrderBadge isComplete={booking.isOrderComplete} />
-        </span>
-        <span style={styles.nextOpen}>
-          Details <Icon name="chevronRight" size={14} strokeWidth={2.6} />
-        </span>
+        <PartyBadges booking={booking} accent={accent} style={{ flex: 1 }} />
+        <span style={styles.nextPrice}>{formatCurrency(booking.totalPrice)}</span>
       </span>
+      <BookingFlags booking={booking} style={{ marginTop: 8 }} />
     </button>
-  )
-}
-
-function Stat({ label, value }) {
-  return (
-    <span style={styles.stat}>
-      <span style={styles.statLabel}>{label}</span>
-      <span style={styles.statValue}>{value}</span>
-    </span>
   )
 }
 
@@ -472,59 +430,20 @@ const styles = {
   countAlert: { background: color.warning, color: '#fff' },
   callRow: { display: 'flex', alignItems: 'center', paddingRight: 12 },
   callButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    background: color.successSoft,
-    color: color.success,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    background: color.primarySoft,
+    color: color.primary,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
 
-  callBanner: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    width: '100%',
-    minHeight: 52,
-    padding: '10px 14px',
-    border: 'none',
-    borderRadius: radius.lg,
-    background: color.warningSoft,
-    color: color.text,
-    textAlign: 'left',
-  },
-  callIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    background: color.warning,
-    color: '#fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  callTitle: { fontSize: 14, fontWeight: 600, color: color.text },
-  callSub: { fontSize: 11, color: color.muted, marginTop: 1 },
-
-  dayHeader: { display: 'flex', alignItems: 'baseline', gap: 8, padding: '8px 4px 8px' },
+  dayHeader: { display: 'flex', alignItems: 'baseline', gap: 8, padding: '10px 4px 8px' },
   dayName: { fontSize: 16, lineHeight: '21px', fontWeight: 700, color: color.text },
-  dayDate: { ...font.subhead },
-  dayCount: {
-    marginLeft: 'auto',
-    alignSelf: 'center',
-    minWidth: 22,
-    textAlign: 'center',
-    padding: '1px 7px',
-    borderRadius: radius.pill,
-    background: color.surfaceMuted,
-    color: color.muted,
-    fontSize: 11,
-    fontWeight: 600,
-  },
+  dayDate: { ...font.subhead, fontWeight: 400 },
   group: {
     background: color.surface,
     borderRadius: radius.lg,
@@ -549,47 +468,47 @@ const styles = {
   next: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 16,
+    gap: 3,
     width: '100%',
     textAlign: 'left',
-    padding: 18,
+    padding: '16px 18px 18px',
     border: 'none',
     borderRadius: 22,
-    background: color.surface,
+    backgroundColor: color.surface,
     boxShadow: shadow.md,
     color: color.text,
-    marginTop: 4,
+    marginTop: 2,
   },
-  nextTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
-  nextEyebrow: {
+  nextTop: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 },
+  eyebrow: {
+    flex: 1,
     display: 'inline-flex',
     alignItems: 'center',
-    gap: 6,
+    gap: 7,
     fontSize: 13,
-    fontWeight: 600,
-    color: color.primary,
+    fontWeight: 700,
+    color: color.indigo,
   },
-
-  nextMain: { display: 'flex', alignItems: 'center', gap: 16 },
-  nextName: { ...font.title2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  nextWhen: { fontSize: 14, color: color.text, marginTop: 2 },
-  nextChild: { ...font.subhead, marginTop: 3, display: 'inline-flex', alignItems: 'center', gap: 5 },
-  nextStats: {
-    display: 'grid',
-    gridTemplateColumns: 'minmax(0, 1fr) auto auto',
-    gap: 18,
-    paddingTop: 14,
+  liveDot: { width: 9, height: 9, borderRadius: 5, background: color.indigo, flexShrink: 0 },
+  countdown: { fontSize: 13, fontWeight: 600, color: color.muted, whiteSpace: 'nowrap' },
+  nextTitle: { ...font.title1, overflowWrap: 'anywhere' },
+  nextSub: { ...font.subhead, fontSize: 14, lineHeight: '19px' },
+  track: {
+    display: 'block',
+    height: 6,
+    borderRadius: 3,
+    background: color.indigoSoft,
+    overflow: 'hidden',
+    margin: '12px 0 2px',
+  },
+  trackFill: { display: 'block', height: '100%', borderRadius: 3, background: color.indigo },
+  nextFoot: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+    paddingTop: 12,
     borderTop: `0.5px solid ${color.border}`,
   },
-  stat: { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 },
-  statLabel: { fontSize: 11, color: color.muted },
-  statValue: {
-    fontSize: 14,
-    fontWeight: 600,
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  nextFoot: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
-  nextOpen: { display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 13, color: color.primary },
+  nextPrice: { fontSize: 15, fontWeight: 700, whiteSpace: 'nowrap' },
 }

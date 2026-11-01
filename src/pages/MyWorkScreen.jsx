@@ -26,6 +26,8 @@ import {
 } from '../lib/staffMk'
 import Header from '../components/Header'
 import Icon from '../components/Icon'
+import { packageMist } from '../components/BookingRow'
+import { useTierColors } from '../lib/tiers'
 import {
   Badge,
   Button,
@@ -34,6 +36,7 @@ import {
   EmptyState,
   Field,
   Input,
+  PackageBadge,
   Segmented,
   Sheet,
   SkeletonList,
@@ -444,12 +447,14 @@ function BirthdayList({ items, shiftHours, busyId, onTake, onDrop, empty, highli
     ) : null
   }
   const nextId = highlightNext ? items.find((b) => !b.isPast)?.bookingId : undefined
+  const tierColor = useTierColors()
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {items.map((b) => (
         <BirthdayCard
           key={b.bookingId}
           b={b}
+          accent={b.tierName ? tierColor(b.tierName) : undefined}
           shiftHours={shiftHours}
           busy={busyId === b.bookingId}
           isNext={b.bookingId === nextId}
@@ -463,7 +468,7 @@ function BirthdayList({ items, shiftHours, busyId, onTake, onDrop, empty, highli
 
 const pad = (n) => String(n).padStart(2, '0')
 
-function BirthdayCard({ b, shiftHours, busy, isNext, onTake, onDrop }) {
+function BirthdayCard({ b, accent, shiftHours, busy, isNext, onTake, onDrop }) {
   const start = new Date(b.eventDate)
   const end = new Date(start.getTime() + shiftHours * 3_600_000)
   const isToday = isoDay(start) === isoDay(new Date())
@@ -473,12 +478,13 @@ function BirthdayCard({ b, shiftHours, busy, isNext, onTake, onDrop }) {
       className="anim-rise"
       style={{
         ...styles.card,
+        backgroundImage: packageMist(accent),
         ...(b.isMine && !b.isPast ? { boxShadow: `inset 0 0 0 1.5px ${color.violet}, ${shadow.sm}` } : {}),
         ...(b.isPast ? { opacity: 0.6 } : {}),
       }}
     >
       {isNext && (
-        <div style={{ ...styles.strip, background: color.violet, color: '#fff' }}>
+        <div style={{ ...styles.strip, background: color.indigo, color: '#fff' }}>
           <Icon name="sparkles" size={13} strokeWidth={2.4} /> Следен роденден
         </div>
       )}
@@ -518,14 +524,14 @@ function BirthdayCard({ b, shiftHours, busy, isNext, onTake, onDrop }) {
           </p>
           <div style={styles.cardMeta}>
             <span style={styles.metaItem}>
-              <Icon name="people" size={14} strokeWidth={2.2} style={{ color: color.primary }} />
+              <Icon name="people" size={14} strokeWidth={2.2} style={{ color: color.teal }} />
               <b>{b.kidsCount}</b> деца
             </span>
             <span style={styles.metaItem}>
-              <Icon name="person" size={13} strokeWidth={2.2} style={{ color: color.teal }} />
+              <Icon name="person" size={13} strokeWidth={2.2} style={{ color: color.muted }} />
               <b>{b.adultsCount}</b> возр.
             </span>
-            {b.tierName && <Badge tone="slate">{b.tierName}</Badge>}
+            {b.tierName && <PackageBadge name={b.tierName} accent={accent} />}
           </div>
         </div>
       </div>
@@ -590,7 +596,7 @@ function CrewBox({ b }) {
         </p>
         {/* Entered by the owner on the booking; hidden until it is set. */}
         {b.suggestedCrew > 0 && (
-          <Badge tone={short ? 'warning' : 'success'}>
+          <Badge tone={short ? 'warning' : 'violet'}>
             Минимум {b.suggestedCrew} {b.suggestedCrew === 1 ? 'девојка' : 'девојки'}
           </Badge>
         )}
@@ -809,7 +815,7 @@ const styles = {
   statValue: { fontSize: 23, fontWeight: 700, color: color.text, marginTop: 4, letterSpacing: '-0.01em' },
   statSub: { ...font.footnote },
 
-  card: { background: color.surface, borderRadius: radius.lg, boxShadow: shadow.sm, overflow: 'hidden' },
+  card: { backgroundColor: color.surface, borderRadius: radius.lg, boxShadow: shadow.sm, overflow: 'hidden' },
   strip: {
     display: 'flex',
     alignItems: 'center',

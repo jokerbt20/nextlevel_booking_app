@@ -38,7 +38,7 @@ export default function SettingsScreen() {
           <div style={{ minWidth: 0, flex: 1 }}>
             <p style={styles.name}>{user?.username ?? '—'}</p>
             {user?.email && <p style={styles.email}>{user.email}</p>}
-            <Badge tone={isAdmin ? 'primary' : 'slate'} style={{ marginTop: 8 }}>
+            <Badge tone={isAdmin ? 'indigo' : 'slate'} style={{ marginTop: 8 }}>
               {isAdmin ? 'Administrator' : isEmployee ? 'Staff' : hasMyWork ? 'Operator · Staff' : 'Operator · View Only'}
             </Badge>
           </div>

@@ -39,7 +39,7 @@ export function formatTime(iso) {
   if (!iso) return null
   const d = new Date(iso)
   if (d.getHours() === 0 && d.getMinutes() === 0) return null
-  return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 }
 
 /** 'YYYY-MM-DD' in local time — never via toISOString(), which shifts the day. */

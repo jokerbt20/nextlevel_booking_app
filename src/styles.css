@@ -201,3 +201,8 @@ input::-webkit-calendar-picker-indicator { opacity: 0.55; }
   button, .pressable { transition: none; }
   .pressable:not(:disabled):active { transform: none; opacity: 0.6; }
 }
+
+/* Bookings: the party that is on right now breathes, slowly. */
+@keyframes live-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--indigo-soft); } 50% { box-shadow: 0 0 0 5px var(--indigo-soft); } }
+.live-dot { animation: live-pulse 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .live-dot { animation: none; } }
