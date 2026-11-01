@@ -39,7 +39,11 @@ const VIEWS = [
   { key: 'calendar', label: 'Calendar' },
 ]
 
-const isFinished = (b) => b.eventDate && new Date(b.eventDate).getTime() < Date.now()
+// A party stays in Upcoming while it is going on: it only counts as finished
+// once this long has passed since it started.
+const PARTY_HOURS = 3
+const isFinished = (b) => b.eventDate && new Date(b.eventDate).getTime() + PARTY_HOURS * 3_600_000 < Date.now()
+const isLive = (b) => b.eventDate && !isFinished(b) && new Date(b.eventDate).getTime() <= Date.now()
 
 function sortByEventDate(bookings, direction = 'asc') {
   const dir = direction === 'desc' ? -1 : 1
@@ -161,7 +165,7 @@ export default function BookingsScreen({ refreshKey, pendingBookingId, onConsume
     finished: finished.length,
   }
 
-  // The soonest party gets the spotlight; the rest follow grouped by day.
+  // The party on right now (or else the soonest) gets the spotlight; the rest follow grouped by day.
   const nextUp =
     filter !== 'finished' && filter !== 'needs_call' && !query && listBookings[0]?.eventDate ? listBookings[0] : null
   const rest = nextUp ? listBookings.slice(1) : listBookings
@@ -344,7 +348,8 @@ export default function BookingsScreen({ refreshKey, pendingBookingId, onConsume
  */
 function NextUpCard({ booking, accent, onClick }) {
   const time = formatTime(booking.eventDate)
-  const countdown = formatCountdown(booking.eventDate)
+  const live = isLive(booking)
+  const countdown = live ? 'On now' : formatCountdown(booking.eventDate)
   // Inside two days the countdown turns orange: that is the window to chase anything open.
   const soon = booking.eventDate && new Date(booking.eventDate).getTime() - Date.now() < 48 * 3_600_000
   const child =
@@ -363,10 +368,10 @@ function NextUpCard({ booking, accent, onClick }) {
       <span style={styles.nextTop}>
         <span style={styles.nextEyebrow}>
           <Icon name="sparkles" size={16} strokeWidth={2} />
-          Next Party
+          {live ? 'Happening Now' : 'Next Party'}
         </span>
         {countdown && (
-          <Badge tone={soon ? 'warning' : 'primary'}>
+          <Badge tone={live ? 'success' : soon ? 'warning' : 'primary'}>
             <Icon name="clock" size={12} strokeWidth={2.4} />
             {countdown}
           </Badge>
