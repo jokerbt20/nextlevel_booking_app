@@ -2,13 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import { getBusinessItems, getMonthlyExpenses } from '../api/reports'
 import { formatCurrency, formatQuantity } from '../utils/format'
 import { color, font, radius } from '../theme'
-import { Badge, Segmented, Sheet, SkeletonList } from './ui'
+import BillsPanel from './BillsPanel'
+import { Segmented, Sheet, SkeletonList } from './ui'
 
 const pad2 = (n) => String(n).padStart(2, '0')
 
 /**
  * One month opened up — the phone's version of the web's month detail: what it
- * earned and what it cost, the month's bills, and the food cost per product.
+ * earned and what it cost, the month's bills (tick one paid, add one), and the
+ * food cost per product.
  *
  * The food list reads the per-party item lines, not the month's own product
  * list: those also carry what the package brings with it (the kids' pizzas),
@@ -45,7 +47,6 @@ export default function MonthDetailSheet({ month: m, onClose }) {
 
   const foodTotal = food.reduce((s, f) => s + f.cost, 0)
   const billList = bills?.expenses ?? []
-  const billTotal = billList.reduce((s, b) => s + Number(b.amount || 0), 0)
   const unpaid = billList.filter((b) => !b.isPaid)
 
   return (
@@ -82,33 +83,13 @@ export default function MonthDetailSheet({ month: m, onClose }) {
         </div>
       )}
 
-      {tab === 'bills' &&
-        (!bills ? (
-          <SkeletonList count={3} />
-        ) : billList.length === 0 ? (
-          <p style={font.subhead}>No bills entered for this month. They are added under Expenses on the web.</p>
-        ) : (
-          <div className="cell-list">
-            {billList.map((b) => (
-              <div key={b.id} style={styles.row}>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span style={styles.name}>{b.name}</span>
-                  <span style={font.footnote}>{b.category}</span>
-                </span>
-                {b.isOverdue ? (
-                  <Badge tone="danger">Late</Badge>
-                ) : (
-                  <Badge tone={b.isPaid ? 'success' : 'warning'}>{b.isPaid ? 'Paid' : 'Unpaid'}</Badge>
-                )}
-                <span style={styles.amount}>{formatCurrency(b.amount)}</span>
-              </div>
-            ))}
-            <div style={{ ...styles.row, fontWeight: 700 }}>
-              <span style={{ flex: 1 }}>Total</span>
-              <span style={styles.amount}>{formatCurrency(billTotal)}</span>
-            </div>
-          </div>
-        ))}
+      {tab === 'bills' && (
+        <BillsPanel
+          year={m.year}
+          month={m.month}
+          onChanged={() => getMonthlyExpenses(m.year, m.month).then(setBills).catch(() => {})}
+        />
+      )}
 
       {tab === 'food' &&
         (!items ? (

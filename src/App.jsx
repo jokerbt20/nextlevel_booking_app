@@ -11,6 +11,7 @@ import BottomNav, { TAB_BAR_SPACE } from './components/BottomNav'
 import { App as CapacitorApp } from '@capacitor/app'
 import { handleBack } from './lib/backStack'
 import { setupPushNotifications } from './push'
+import { useLowStockCount } from './lib/lowStock'
 import { color, font } from './theme'
 
 const TAB = { MY_WORK: 'my-work', BOOKINGS: 'bookings', STAFF: 'staff', REPORTS: 'reports', SETTINGS: 'settings' }
@@ -58,6 +59,8 @@ function AppInner() {
   // { date } while the new-booking modal is open.
   const [composer, setComposer] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  // Products running low, shown as a count on the Reports tab (Admin only).
+  const lowStock = useLowStockCount(!!session && isAdmin, refreshKey)
   const scroller = useRef(null)
   // The back and push handlers are registered once, so they read the role here.
   const authRef = useRef(auth)
@@ -65,12 +68,21 @@ function AppInner() {
 
   useEffect(() => {
     if (!session) return
-    return setupPushNotifications((bookingId) => {
+    return setupPushNotifications(({ type, bookingId }) => {
       setComposer(null)
-      // A booking notification only means something to a login that can open bookings.
-      if (!navFor(authRef.current).some((n) => n.key === TAB.BOOKINGS)) return
+      const has = (key) => navFor(authRef.current).some((n) => n.key === key)
+      // Days off and shifts lead to the staff screens: the owner answers requests
+      // under Staff, a staff member reads their own under My Work.
+      if (type === 'timeoff' || type === 'shift') {
+        if (type === 'timeoff' && has(TAB.STAFF)) setTab(TAB.STAFF)
+        else if (has(TAB.MY_WORK)) setTab(TAB.MY_WORK)
+        return
+      }
+      // Everything else is about a booking, and only means something to a login
+      // that can open bookings.
+      if (!has(TAB.BOOKINGS)) return
       setTab(TAB.BOOKINGS)
-      setPendingBookingId(bookingId)
+      if (bookingId) setPendingBookingId(bookingId)
     })
   }, [session])
 
@@ -128,7 +140,15 @@ function AppInner() {
         </div>
       </div>
 
-      <BottomNav tab={activeTab} setTab={setTab} items={nav} />
+      <BottomNav
+        tab={activeTab}
+        setTab={setTab}
+        items={nav.map((n) =>
+          n.key === TAB.REPORTS && lowStock > 0
+            ? { ...n, badge: lowStock, badgeLabel: `${lowStock} products running low` }
+            : n,
+        )}
+      />
 
       {composer && isAdmin && (
         <NewBookingScreen

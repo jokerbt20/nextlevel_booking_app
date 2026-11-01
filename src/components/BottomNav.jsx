@@ -4,7 +4,8 @@ import Icon from './Icon'
 /**
  * The tab bar floats as a capsule on a material over the content, the way the
  * current iOS tab bar does. Tabs only navigate; nothing here performs an action.
- * The selected tab gets the filled glyph and the accent tint.
+ * The selected tab gets the filled glyph and the accent tint. A tab can carry an
+ * orange count — something there needs doing (Reports: products running low).
  */
 export default function BottomNav({ tab, setTab, items }) {
   return (
@@ -19,9 +20,13 @@ export default function BottomNav({ tab, setTab, items }) {
               role="tab"
               aria-selected={active}
               onClick={() => setTab(item.key)}
+              aria-label={item.badge ? `${item.label}, ${item.badgeLabel ?? item.badge}` : undefined}
               style={{ ...styles.button, ...(active ? styles.buttonActive : {}) }}
             >
-              <Icon name={active ? item.iconActive : item.icon} size={24} strokeWidth={2} />
+              <span style={{ position: 'relative', display: 'inline-flex' }}>
+                <Icon name={active ? item.iconActive : item.icon} size={24} strokeWidth={2} />
+                {item.badge > 0 && <span style={styles.badge}>{item.badge > 9 ? '9+' : item.badge}</span>}
+              </span>
               <span style={styles.label}>{item.label}</span>
             </button>
           )
@@ -72,4 +77,20 @@ const styles = {
   },
   buttonActive: { color: color.primary, background: color.surfaceMuted },
   label: { fontSize: 11, fontWeight: 600, lineHeight: '13px' },
+  badge: {
+    position: 'absolute',
+    top: -5,
+    right: -10,
+    minWidth: 18,
+    height: 18,
+    padding: '0 5px',
+    borderRadius: 9,
+    background: color.warning,
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: 700,
+    lineHeight: '18px',
+    textAlign: 'center',
+    boxShadow: '0 0 0 2px var(--surface)',
+  },
 }

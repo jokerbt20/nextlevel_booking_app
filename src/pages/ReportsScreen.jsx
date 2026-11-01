@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getBusinessReport, getProductProfitReport, getStockReport } from '../api/reports'
 import { formatCurrency, formatDate, formatPercent, formatQuantity } from '../utils/format'
-import Header from '../components/Header'
+import Header, { BarButton } from '../components/Header'
+import BillsPanel from '../components/BillsPanel'
+import StockSheet from '../components/StockSheet'
+import { stockChanged } from '../lib/lowStock'
 import Icon from '../components/Icon'
 import MonthlyBars from '../components/MonthlyBars'
-import { Badge, EmptyState, ErrorState, SearchField, SkeletonList } from '../components/ui'
+import { Badge, EmptyState, ErrorState, SearchField, Sheet, SkeletonList } from '../components/ui'
 import {
   Bar,
   CountNumber,
@@ -42,11 +45,55 @@ export default function ReportsScreen() {
   // One period for every tab that has one, so switching tabs never silently
   // changes the window being looked at. Stock is a snapshot and ignores it.
   const [period, setPeriod] = useState('year')
+  const [stockFilter, setStockFilter] = useState('all')
+  const [isAddingBill, setIsAddingBill] = useState(false)
+  const [low, setLow] = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  // What is running out, said up front on every tab but Stock itself.
+  useEffect(() => {
+    getStockReport()
+      .then((r) => setLow((r?.products ?? []).filter((p) => p.isActive !== false && (p.quantityOnHand <= 0 || p.isLowStock))))
+      .catch(() => setLow(null))
+  }, [refreshKey])
+
+  const now = new Date()
+  const monthName = now.toLocaleDateString(undefined, { month: 'long' })
 
   return (
     <div>
-      <Header title="Reports" />
+      <Header
+        title="Reports"
+        right={
+          <BarButton label="Add expense" onClick={() => setIsAddingBill(true)}>
+            <Icon name="plus" size={26} strokeWidth={2.2} />
+          </BarButton>
+        }
+      />
       <div style={styles.container}>
+        {low?.length > 0 && tab !== 'stock' && (
+          <button
+            type="button"
+            className="pressable"
+            style={styles.lowCard}
+            onClick={() => {
+              setStockFilter('needs')
+              setTab('stock')
+            }}
+          >
+            <span style={styles.lowIcon}>
+              <Icon name="exclamation" size={17} strokeWidth={2.4} />
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={styles.lowTitle}>
+                {low.length} {low.length === 1 ? 'product is' : 'products are'} running low
+              </span>
+              <span style={styles.lowList}>{low.slice(0, 4).map((p) => p.name).join(', ')}{low.length > 4 ? '…' : ''}</span>
+            </span>
+            <Icon name="chevronRight" size={15} strokeWidth={2.4} style={{ color: color.faint }} />
+          </button>
+        )}
+
         <div style={styles.tabs} role="tablist">
           {TABS.map((t) => {
             const active = t.key === tab
@@ -85,10 +132,29 @@ export default function ReportsScreen() {
         <div key={tab} style={styles.stack}>
           {tab === 'money' && <MoneyTab period={period} />}
           {tab === 'parties' && <PartiesTab period={period} />}
-          {tab === 'stock' && <StockTab />}
+          {tab === 'stock' && (
+            <StockTab
+              show={stockFilter}
+              setShow={setStockFilter}
+              onChanged={() => {
+                setRefreshKey((k) => k + 1)
+                stockChanged()
+              }}
+            />
+          )}
           {tab === 'products' && <ProductsTab period={period} />}
         </div>
       </div>
+
+      {isAddingBill && (
+        <Sheet
+          title={`Bills · ${monthName}`}
+          subtitle="Tick a bill paid, or add a new expense."
+          onClose={() => setIsAddingBill(false)}
+        >
+          <BillsPanel year={now.getFullYear()} month={now.getMonth() + 1} startAdding />
+        </Sheet>
+      )}
     </div>
   )
 }
@@ -453,10 +519,10 @@ function SortChips({ options, value, onChange }) {
 
 const rankOf = (p) => (p.quantityOnHand <= 0 ? 'out' : p.isLowStock ? 'low' : 'ok')
 
-function StockTab() {
+function StockTab({ show, setShow, onChanged }) {
   const { data, error, isLoading, reload } = useReport(() => getStockReport())
-  const [show, setShow] = useState('all')
   const [query, setQuery] = useState('')
+  const [editing, setEditing] = useState(null)
 
   if (isLoading) return <SkeletonList count={4} />
   if (error) return <ErrorState message={error} onRetry={reload} />
@@ -474,7 +540,8 @@ function StockTab() {
   // Trouble first: out of stock, then low, then everything else.
   const order = { out: 0, low: 1, ok: 2 }
   const list = products
-    .filter((p) => show === 'all' || rankOf(p) === show)
+    // 'needs' is what the low-stock card opens: everything to reorder, out or low.
+    .filter((p) => show === 'all' || rankOf(p) === show || (show === 'needs' && rankOf(p) !== 'ok'))
     .filter((p) => !q || `${p.name} ${p.categoryName ?? ''}`.toLowerCase().includes(q))
     .sort((a, b) => order[rankOf(a)] - order[rankOf(b)] || b.stockValue - a.stockValue)
 
@@ -503,11 +570,22 @@ function StockTab() {
       </div>
 
       <SearchField value={query} onChange={setQuery} placeholder="Search products" />
+      <p style={{ ...styles.hint, marginTop: -6 }}>Tap a product to record a delivery or a stock count.</p>
 
       <Panel
         icon="box"
         tint="var(--series-1)"
-        title={show === 'all' ? 'Every product' : show === 'out' ? 'Out of stock' : show === 'low' ? 'Running low' : 'In stock'}
+        title={
+          show === 'all'
+            ? 'Every product'
+            : show === 'needs'
+              ? 'To reorder'
+              : show === 'out'
+                ? 'Out of stock'
+                : show === 'low'
+                  ? 'Running low'
+                  : 'In stock'
+        }
         right={show !== 'all' && (
           <button type="button" onClick={() => setShow('all')} style={styles.clearFilter}>
             Show all
@@ -519,7 +597,16 @@ function StockTab() {
         {list.map((p, i) => {
           const rank = rankOf(p)
           return (
-            <div key={p.id} style={styles.stockRow}>
+            // A row of several blocks, so a div acting as a button rather than a <button>.
+            <div
+              key={p.id}
+              role="button"
+              tabIndex={0}
+              className="cell-button"
+              style={styles.stockRow}
+              onClick={() => setEditing(p)}
+              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), setEditing(p))}
+            >
               <div style={styles.stockTop}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={styles.stockName}>{p.name}</p>
@@ -544,6 +631,18 @@ function StockTab() {
           )
         })}
       </Panel>
+
+      {editing && (
+        <StockSheet
+          product={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null)
+            reload()
+            onChanged?.()
+          }}
+        />
+      )}
     </>
   )
 }
@@ -753,7 +852,34 @@ const styles = {
     borderRadius: radius.pill,
     padding: '5px 10px',
   },
-  stockRow: { display: 'flex', flexDirection: 'column', gap: 7, paddingBottom: 10, borderBottom: `0.5px solid ${color.border}` },
+  stockRow: { display: 'flex', flexDirection: 'column', gap: 7, padding: '6px 0 10px', borderBottom: `0.5px solid ${color.border}`, cursor: 'pointer' },
+
+  lowCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+    minHeight: 56,
+    padding: '10px 14px',
+    border: 'none',
+    borderRadius: radius.lg,
+    background: color.warningSoft,
+    color: color.text,
+    textAlign: 'left',
+  },
+  lowIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    background: color.warning,
+    color: '#fff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  lowTitle: { display: 'block', fontSize: 14, fontWeight: 600 },
+  lowList: { display: 'block', fontSize: 12, color: color.muted, marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   stockTop: { display: 'flex', alignItems: 'center', gap: 10 },
   stockName: { fontSize: 14, color: color.text, fontWeight: 500 },
   stockMeta: { fontSize: 12, color: color.muted, marginTop: 2 },

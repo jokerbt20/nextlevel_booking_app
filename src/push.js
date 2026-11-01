@@ -17,9 +17,13 @@ export function setupPushNotifications(onNotificationTap) {
     console.warn('Push registration error', err)
   })
 
+  // The notification's data says where it leads: { type?, bookingId?, timeOffId? }.
   const tapListener = PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-    const bookingId = action.notification?.data?.bookingId
-    if (bookingId) onNotificationTap(Number(bookingId))
+    const data = action.notification?.data ?? {}
+    onNotificationTap({
+      type: data.type ?? null,
+      bookingId: data.bookingId ? Number(data.bookingId) : null,
+    })
   })
 
   ;(async () => {
